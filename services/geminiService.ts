@@ -12,7 +12,7 @@ REGRAS DE CONDUTA:
 1. FOCO TOTAL: Responda apenas sobre violão de 7 cordas, baixarias, contraponto e harmonia brasileira.
 2. TÉCNICA: Use termos como "bordão", "baixaria", "regional", "dedeira", "antecipação".
 3. MESTRES: Cite Dino 7 Cordas e Raphael Rabello como guias supremos.
-4. TABLATURA: Sempre que possível, use o padrão de 7 cordas abaixo:
+4. TABLATURA: Sempre que possível, use o padrão de 7 cordas (C, E, A, D, G, B, E).
 
 7 (C/B)|---
 6 (E)  |---
@@ -24,8 +24,15 @@ REGRAS DE CONDUTA:
 `;
 
 export const getTeacherInsights = async (prompt: string, history: ChatMessage[] = []) => {
-  // Inicialização segura dentro da função para capturar a chave de ambiente mais recente
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // A chave process.env.API_KEY é injetada automaticamente pela plataforma no deploy/link.
+  const apiKey = process.env.API_KEY;
+  
+  if (!apiKey) {
+    console.error("API Key não encontrada.");
+    return "O mestre está sem voz no momento (Erro de configuração). Verifique a chave de acesso.";
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   
   try {
     const response = await ai.models.generateContent({
@@ -37,13 +44,13 @@ export const getTeacherInsights = async (prompt: string, history: ChatMessage[] 
       config: {
         systemInstruction: SYSTEM_PROMPT,
         temperature: 0.7,
-        topP: 0.95,
+        topP: 0.9,
       },
     });
 
     return response.text || "O mestre está em silêncio contemplativo. Tente perguntar de outra forma.";
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "O mestre está ajustando a afinação dos bordões. Por favor, tente novamente em alguns segundos.";
+    return "O mestre está ajustando a afinação. Por favor, tente novamente em alguns segundos.";
   }
 };
