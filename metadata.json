@@ -1,0 +1,7 @@
+{
+  "name": "Mestre Virtual 7 Cordas",
+  "description": "O primeiro e mais completo sistema de Inteligência Artificial sobre o violão de 7 cordas no mundo.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
