@@ -1,20 +1,26 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# 🎸 Mestre Virtual 7 Cordas
 
-This contains everything you need to run your app locally.
+O primeiro e mais completo sistema de **Inteligência Artificial** especializado em violão de 7 cordas do mundo. Focado na tradição do Regional Brasileiro: Samba, Choro e Pagode.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1nzbNbIuH0x9LUkt4I9CogX3u6CZ00B43
+## 🚀 Funcionalidades
+- **IA Especialista**: Consultoria técnica sobre baixarias, contrapontos e harmonia.
+- **Comandos de Voz**: Interação fluida via áudio (Speech Recognition).
+- **Tablaturas ASCII**: Geração automática de tablaturas para 7 cordas.
+- **Consultoria Premium**: Link direto para tirar dúvidas avançadas via WhatsApp.
+- **Layout Multi-Device**: Otimizado para Mobile, Tablet e Desktop.
 
-## Run Locally
+## 🛠️ Tecnologias
+- React 19
+- Tailwind CSS
+- Google Gemini API (IA)
+- Lucide React (Ícones)
+- ESM.sh (Module Loader)
 
-**Prerequisites:**  Node.js
+## 📦 Como rodar localmente
+1. Clone o repositório.
+2. Certifique-se de ter uma chave de API do Google Gemini configurada em seu ambiente.
+3. Abra o `index.html` em um servidor local.
 
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+---
+Desenvolvido para preservar e evoluir a linguagem do violão de 7 cordas brasileiro.

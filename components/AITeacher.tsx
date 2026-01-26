@@ -64,7 +64,6 @@ const AITeacher: React.FC = () => {
     if (isListening) { recognitionRef.current?.stop(); setIsListening(false); }
 
     const newUserMessage = { role: 'user' as const, text: textToSearch };
-    // Preservamos o histórico atual antes de atualizar o estado para enviar à API
     const currentHistory: ChatMessage[] = messages.map(m => ({
       role: m.role === 'user' ? 'user' : 'model',
       parts: [{ text: m.text }]
@@ -105,7 +104,6 @@ const AITeacher: React.FC = () => {
                 ? 'bg-gradient-to-r from-violet-600 via-fuchsia-600 to-blue-500 text-white animate-pulse ring-4 ring-fuchsia-500/30 drop-shadow-[0_0_15px_rgba(192,38,211,0.6)]' 
                 : 'bg-gradient-to-br from-indigo-600 to-blue-800 text-white hover:scale-105 active:scale-95 shadow-indigo-900/40 border-b-4 border-indigo-950'
               }`}
-              title="Comando de Voz"
             >
               {isListening ? <MicOff className="w-6 h-6 mr-2" /> : <Mic className="w-6 h-6 mr-2" />}
               <span className="text-[11px] md:text-xs font-black uppercase tracking-widest">{isListening ? 'Ouvindo...' : 'Voz'}</span>
@@ -124,7 +122,7 @@ const AITeacher: React.FC = () => {
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
-            placeholder="Pergunte ao Mestre sobre baixarias e técnicas..."
+            placeholder="Pergunte ao Mestre sobre técnicas..."
             className="flex-1 w-full bg-transparent border-none py-4 text-white placeholder:text-slate-700 focus:ring-0 outline-none font-bold text-lg md:text-2xl px-2"
           />
           
@@ -148,7 +146,7 @@ const AITeacher: React.FC = () => {
       </div>
 
       {/* 2. CHAT AREA */}
-      <div className="bg-[#050505] border border-white/5 rounded-[2.5rem] md:rounded-[4rem] shadow-2xl flex flex-col h-[500px] md:h-[650px] relative overflow-hidden">
+      <div className="bg-[#050505] border border-white/5 rounded-[2.5rem] md:rounded-[4rem] shadow-2xl flex flex-col h-[400px] sm:h-[500px] md:h-[650px] relative overflow-hidden">
         <div className="p-5 md:p-8 border-b border-white/5 flex items-center justify-between bg-black/60 backdrop-blur-xl relative z-10">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-amber-500 to-amber-700 rounded-2xl flex items-center justify-center shadow-lg border border-amber-400/20">
@@ -214,9 +212,9 @@ const AITeacher: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. CONSULTORIA SECTION (Atualizado: Sem Aulas) */}
+      {/* 3. CONSULTORIA SECTION (Atualizado: Apenas Dúvidas Técnicas) */}
       <div className="mt-2">
-        <button onClick={() => window.open(`https://wa.me/${WHATSAPP_NUMBER}`, '_blank')} className="w-full group relative p-1 rounded-[2rem] md:rounded-[3.5rem] bg-gradient-to-r from-green-600/40 via-amber-600/20 to-green-600/40 hover:from-green-500 hover:to-green-500 transition-all duration-700 shadow-2xl overflow-hidden active:scale-[0.98]">
+        <button onClick={() => window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=Olá! Tenho uma dúvida técnica sobre violão de 7 cordas.`, '_blank')} className="w-full group relative p-1 rounded-[2rem] md:rounded-[3.5rem] bg-gradient-to-r from-green-600/40 via-amber-600/20 to-green-600/40 hover:from-green-500 hover:to-green-500 transition-all duration-700 shadow-2xl overflow-hidden active:scale-[0.98]">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md rounded-[2rem] md:rounded-[3.5rem]" />
           <div className="relative flex flex-col md:flex-row items-center justify-between gap-8 p-8 md:p-12 border border-white/10 rounded-[2rem] md:rounded-[3.5rem]">
             <div className="flex items-center gap-6 text-center md:text-left flex-col md:flex-row">
@@ -230,7 +228,7 @@ const AITeacher: React.FC = () => {
             </div>
             <div className="flex items-center gap-4 bg-green-600 hover:bg-green-500 text-white px-10 py-5 rounded-2xl font-black uppercase tracking-[0.3em] text-xs md:text-sm transition-all shadow-[0_10px_30px_rgba(22,163,74,0.4)] whitespace-nowrap">
               <MessageCircle className="w-5 h-5 md:w-6 md:h-6" />
-              Falar com o Mestre
+              Tirar Dúvidas
             </div>
           </div>
         </button>

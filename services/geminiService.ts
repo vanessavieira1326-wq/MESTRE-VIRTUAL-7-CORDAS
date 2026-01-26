@@ -27,10 +27,16 @@ ESTRUTURA DE TABLATURA (7 CORDAS):
 `;
 
 export const getTeacherInsights = async (prompt: string, history: ChatMessage[] = []) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  
+  if (!apiKey) {
+    console.error("API Key not found. Please ensure process.env.API_KEY is configured.");
+    return "A configuração de acesso à IA está ausente. Por favor, verifique sua Chave de API.";
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   
   try {
-    // Construímos o conteúdo garantindo a ordem correta para o modelo de chat
     const contents = [
       ...history,
       { role: 'user', parts: [{ text: prompt }] }
@@ -47,12 +53,12 @@ export const getTeacherInsights = async (prompt: string, history: ChatMessage[] 
     });
 
     if (!response || !response.text) {
-      throw new Error("Resposta vazia da IA");
+      throw new Error("Empty AI response");
     }
 
     return response.text;
   } catch (error) {
     console.error("AI Teacher Error:", error);
-    return "O mestre está ajustando a afinação dos bordões. Por favor, faça sua pergunta novamente.";
+    return "O mestre está ajustando a afinação. Por favor, tente enviar sua pergunta novamente.";
   }
 };
