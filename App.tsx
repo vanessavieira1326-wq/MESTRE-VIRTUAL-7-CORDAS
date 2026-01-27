@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import AITeacher from './components/AITeacher';
-import { Guitar, ShieldCheck, Music2, Star, Zap, Music } from 'lucide-react';
+import { ShieldCheck, Music2, Star, Zap, Music } from 'lucide-react';
 
 const musicalNotationFragments = [
   "♩=120", "♫ ♬ ♭", "♯C7M(9)", "♭9/♯11", "|--7--5--|", "𝄞 𝄢", "A/G#", "D7(b9)", "G/B", "E7/D", "|--0-h-2--|", "p.i.m.a", "7ª Corda (C)", "|--x--|", "B7(13)", "Cm7(b5)"
@@ -30,6 +30,36 @@ const ThoughtTicker: React.FC = () => {
   );
 };
 
+const AppIcon: React.FC = () => (
+  <div className="relative group shrink-0">
+    {/* Aura de profundidade - Brilho ambiente suave */}
+    <div className="absolute -inset-4 bg-amber-600/10 rounded-[1.5rem] md:rounded-[2rem] blur-xl opacity-30 group-hover:opacity-60 transition duration-1000"></div>
+    
+    {/* Container Principal do Ícone - Estilo Squircle Minimalista */}
+    <div className="relative p-1 bg-gradient-to-b from-[#4a2e1d] via-[#1a0f0a] to-[#0c0604] rounded-[1.5rem] md:rounded-[2.2rem] shadow-[0_15px_40px_rgba(0,0,0,0.8),inset_0_1px_3px_rgba(255,255,255,0.1)] border border-[#3d2516]">
+      
+      <div className="relative w-20 h-20 md:w-28 md:h-28 rounded-[1.2rem] md:rounded-[1.8rem] overflow-hidden flex items-center justify-center bg-[#1a0f0a]">
+        {/* Fundo de Luthieria Abstrato */}
+        <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] mix-blend-overlay"></div>
+        <div className="absolute inset-0 bg-gradient-to-tr from-amber-900/40 via-transparent to-amber-500/10"></div>
+        
+        {/* Ícone Musical Minimalista em Destaque */}
+        <Music2 className="relative z-20 w-10 h-10 md:w-14 md:h-14 text-amber-500/80 drop-shadow-[0_0_15px_rgba(245,158,11,0.5)] group-hover:scale-110 transition-transform duration-500" />
+        
+        {/* Vinheta de bordas para profundidade */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/60 z-10"></div>
+
+        {/* Efeito de Reflexo Superior (Glossy Finish) */}
+        <div className="absolute top-0 left-0 w-full h-[50%] bg-gradient-to-b from-white/10 to-transparent pointer-events-none z-30 opacity-40"></div>
+        <div className="absolute inset-0 shadow-[inset_0_0_30px_rgba(0,0,0,0.6)] pointer-events-none z-30"></div>
+        
+        {/* Brilho de verniz no centro ao passar o mouse */}
+        <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 pointer-events-none z-20"></div>
+      </div>
+    </div>
+  </div>
+);
+
 const App: React.FC = () => {
   const [description, setDescription] = useState("");
 
@@ -38,23 +68,27 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#020202] text-slate-100 flex flex-col font-sans overflow-x-hidden selection:bg-amber-500/40">
-      {/* Background FX */}
+    <div className="min-h-screen bg-[#0c0604] text-slate-100 flex flex-col font-sans overflow-x-hidden selection:bg-amber-500/40">
+      {/* Background FX - Atmosfera imersiva de Luthieria */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-amber-900/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-amber-600/5 rounded-full blur-[150px]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#1a0f0a] via-[#0c0604] to-[#120a07]" />
+        <div className="absolute inset-0 opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] mix-blend-overlay" />
+        <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[120%] h-[70%] bg-orange-950/20 rounded-full blur-[140px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-radial-gradient from-amber-900/5 via-transparent to-transparent opacity-30" />
       </div>
 
-      {/* Header Responsivo */}
-      <header className="sticky top-0 z-50 w-full bg-black/60 backdrop-blur-2xl border-b border-white/5 p-4 md:p-6 lg:p-8">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 md:gap-5">
-            <div className="p-3 md:p-4 bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl md:rounded-2xl shadow-lg shadow-amber-900/20 border border-amber-400/20">
-              <Guitar className="w-6 h-6 md:w-8 md:h-8 text-white" />
+      {/* Header com o Ícone Limpo */}
+      <header className="sticky top-0 z-50 w-full bg-[#0c0604]/90 backdrop-blur-2xl border-b border-white/5 p-4 md:p-6">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-4 md:gap-8">
+            
+            <AppIcon />
+            
+            <div className="flex flex-col text-center sm:text-left">
+              <h1 className="text-3xl md:text-5xl lg:text-7xl font-black tracking-tighter bg-gradient-to-r from-white via-amber-50 to-amber-500 bg-clip-text text-transparent italic leading-none drop-shadow-2xl">
+                Mestre Virtual 7C
+              </h1>
             </div>
-            <h1 className="text-xl md:text-3xl lg:text-4xl font-black tracking-tighter bg-gradient-to-r from-white via-amber-200 to-amber-500 bg-clip-text text-transparent italic">
-              Mestre Virtual 7C
-            </h1>
           </div>
           <ThoughtTicker />
         </div>
@@ -69,16 +103,16 @@ const App: React.FC = () => {
         {/* Info Section - Secondary */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center mt-6">
           <div className="lg:col-span-8">
-            <p className="text-slate-400 text-lg md:text-2xl leading-relaxed font-medium border-l-4 border-amber-600 pl-6 italic">
+            <p className="text-slate-400 text-lg md:text-2xl leading-relaxed font-medium border-l-4 border-amber-900 pl-6 italic shadow-sm">
               "{description}"
             </p>
           </div>
           <div className="lg:col-span-4 flex items-center justify-center lg:justify-end">
-            <div className="flex flex-col items-center lg:items-end gap-3 p-6 bg-white/5 rounded-3xl border border-white/10 w-full max-w-sm">
+            <div className="flex flex-col items-center lg:items-end gap-3 p-6 bg-black/50 backdrop-blur-xl rounded-[2rem] border border-white/5 w-full max-w-sm shadow-2xl">
               <Music2 className="w-8 h-8 text-amber-500 mb-2" />
               <div className="text-center lg:text-right">
-                <span className="block text-[10px] font-black text-amber-500 uppercase tracking-widest">Tecnologia Musical</span>
-                <span className="text-lg font-bold text-white italic">Baixarias & Contraponto</span>
+                <span className="block text-[10px] font-black text-amber-600 uppercase tracking-widest">Escola de Regional</span>
+                <span className="text-xl font-bold text-white italic">Baixarias & Harmonia</span>
               </div>
             </div>
           </div>
@@ -92,10 +126,10 @@ const App: React.FC = () => {
             { icon: Zap, title: "IA Especialista", desc: "Processando décadas de tradição para ensinar o futuro do violão." }
           ].map((item, idx) => (
             <div key={idx} className="flex flex-col items-center text-center md:items-start md:text-left space-y-3 group">
-              <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10 group-hover:border-amber-500/50 transition-colors">
-                <item.icon className="w-6 h-6 text-amber-500" />
+              <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10 group-hover:border-amber-500/50 transition-all group-hover:scale-110 shadow-lg">
+                <item.icon className="w-8 h-8 text-amber-500" />
               </div>
-              <h4 className="font-black text-slate-100 text-xs uppercase tracking-widest">{item.title}</h4>
+              <h4 className="font-black text-slate-100 text-sm uppercase tracking-widest">{item.title}</h4>
               <p className="text-sm text-slate-500 leading-relaxed px-4 md:px-0">{item.desc}</p>
             </div>
           ))}
