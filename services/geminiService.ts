@@ -26,41 +26,33 @@ ESTRUTURA DE TABLATURA (7 CORDAS):
 `;
 
 export const getTeacherInsights = async (prompt: string, history: ChatMessage[] = []) => {
-  // Inicializamos a cada chamada para garantir que usamos a chave mais recente se houver mudanças no ambiente
+  // Inicialização obrigatória usando a chave de API do ambiente
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
-    // Limitamos o histórico para evitar estourar o limite de tokens em conexões instáveis
-    const limitedHistory = history.slice(-6);
-
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: [
-        ...limitedHistory,
+        ...history,
         { role: 'user', parts: [{ text: prompt }] }
       ],
       config: {
         systemInstruction: SYSTEM_PROMPT,
         temperature: 0.7,
-        topP: 0.9,
-        // Removido maxOutputTokens para evitar cortes abruptos em respostas longas
+        topP: 0.95,
       },
     });
 
+    // Acesso direto à propriedade .text conforme diretrizes
     const text = response.text;
     
     if (!text) {
-      throw new Error("Resposta vazia do servidor.");
+      throw new Error("O modelo retornou uma resposta vazia.");
     }
 
     return text;
-  } catch (error: any) {
-    console.error("AI Teacher Error Details:", error);
-    
-    // Tratamento específico de erros comuns
-    if (error.message?.includes('429')) return "O mestre está atendendo muitos alunos agora. Aguarde um momento e tente novamente.";
-    if (error.message?.includes('network')) return "Erro de rede. Verifique sua conexão com a internet.";
-    
-    return "Ocorreu um erro na conexão com o Mestre. Por favor, tente enviar sua mensagem novamente.";
+  } catch (error) {
+    console.error("AI Teacher Error:", error);
+    return "O mestre está ajustando a afinação dos bordões. Por favor, tente novamente em alguns instantes.";
   }
 };

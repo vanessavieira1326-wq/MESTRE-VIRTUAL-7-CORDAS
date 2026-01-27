@@ -6,49 +6,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Mestre Virtual 7 Cordas</title>
     
-    <!-- PWA Meta Tags -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Mestre 7C">
-    <link rel="apple-touch-icon" href="https://fonts.gstatic.com/s/i/short-term/release/googletsymbols/music_note/default/48px.svg">
-    <link rel="manifest" href="manifest.json" />
-
+    <!-- Meta tags para compartilhamento -->
     <meta name="description" content="O sistema de IA definitivo para Violão de 7 Cordas. Baixarias e harmonia com o Mestre Virtual." />
     <meta property="og:title" content="Mestre Virtual 7 Cordas" />
     <meta property="og:type" content="website" />
-    <meta name="theme-color" content="#0c0604" />
+    <meta name="theme-color" content="#1a0f0a" />
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
       body {
         font-family: 'Inter', sans-serif;
-        background-color: #0c0604;
+        background-color: #0c0604; /* Imbuia Nobre Escura */
         color: #f8fafc;
         margin: 0;
         padding: 0;
         -webkit-font-smoothing: antialiased;
-        overscroll-behavior-y: contain; /* Evita pull-to-refresh acidental */
       }
       h1, h2, h3, h4 {
         font-family: 'Playfair Display', serif;
       }
       .custom-scrollbar::-webkit-scrollbar {
-        width: 4px;
+        width: 6px;
       }
       .custom-scrollbar::-webkit-scrollbar-track {
-        background: transparent;
+        background: #0c0604;
       }
       .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: #3a1d13;
+        background: #3a1d13; /* Mogno Acetinado */
         border-radius: 10px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #78350f; /* Brilho do verniz mel */
       }
       /* Prevenção de zoom em inputs no mobile */
       @media screen and (max-width: 768px) {
         input, textarea { font-size: 16px !important; }
-      }
-      .drop-shadow-glow {
-        filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.4));
       }
     </style>
     <script type="importmap">
@@ -68,12 +61,5 @@
   <body>
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('sw.js').catch(err => console.log('SW register error:', err));
-        });
-      }
-    </script>
   </body>
 </html>
