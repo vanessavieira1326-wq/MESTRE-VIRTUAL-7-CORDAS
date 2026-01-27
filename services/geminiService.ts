@@ -26,14 +26,16 @@ ESTRUTURA DE TABLATURA (7 CORDAS):
 `;
 
 export const getTeacherInsights = async (prompt: string, history: ChatMessage[] = []) => {
-  // Inicialização obrigatória usando a chave de API do ambiente
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
+    // Limitamos o histórico às últimas 8 interações para estabilidade de conexão
+    const optimizedHistory = history.slice(-8);
+
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: [
-        ...history,
+        ...optimizedHistory,
         { role: 'user', parts: [{ text: prompt }] }
       ],
       config: {
@@ -43,16 +45,20 @@ export const getTeacherInsights = async (prompt: string, history: ChatMessage[] 
       },
     });
 
-    // Acesso direto à propriedade .text conforme diretrizes
     const text = response.text;
     
     if (!text) {
-      throw new Error("O modelo retornou uma resposta vazia.");
+      throw new Error("Resposta vazia");
     }
 
     return text;
-  } catch (error) {
-    console.error("AI Teacher Error:", error);
-    return "O mestre está ajustando a afinação dos bordões. Por favor, tente novamente em alguns instantes.";
+  } catch (error: any) {
+    console.error("AI Connection Error:", error);
+    
+    if (error.message?.includes('network') || error.message?.includes('fetch')) {
+      throw new Error("Erro de rede: Verifique sua internet.");
+    }
+    
+    throw new Error("O mestre teve um problema na conexão. Tente novamente.");
   }
 };
