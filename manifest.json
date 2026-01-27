@@ -1,0 +1,26 @@
+
+{
+  "short_name": "Mestre 7C",
+  "name": "Mestre Virtual 7 Cordas",
+  "icons": [
+    {
+      "src": "https://fonts.gstatic.com/s/i/short-term/release/googletsymbols/music_note/default/48px.svg",
+      "sizes": "48x48",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "https://fonts.gstatic.com/s/i/short-term/release/googletsymbols/music_note/default/192px.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "https://fonts.gstatic.com/s/i/short-term/release/googletsymbols/music_note/default/512px.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0c0604",
+  "background_color": "#0c0604"
+}
