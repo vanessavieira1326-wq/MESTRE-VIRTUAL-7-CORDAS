@@ -26,10 +26,10 @@ ESTRUTURA DE TABLATURA (7 CORDAS):
 `;
 
 export const getTeacherInsights = async (prompt: string, history: ChatMessage[] = []) => {
+  // Criamos uma nova instância a cada chamada para usar a chave mais atualizada do process.env.API_KEY
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
-    // Limitamos o histórico às últimas 8 interações para estabilidade de conexão
     const optimizedHistory = history.slice(-8);
 
     const response = await ai.models.generateContent({
@@ -55,10 +55,16 @@ export const getTeacherInsights = async (prompt: string, history: ChatMessage[] 
   } catch (error: any) {
     console.error("AI Connection Error:", error);
     
-    if (error.message?.includes('network') || error.message?.includes('fetch')) {
+    const message = error.message?.toLowerCase() || "";
+    
+    if (message.includes('not found') || message.includes('api_key') || message.includes('401') || message.includes('403')) {
+      throw new Error("REAUTH_REQUIRED");
+    }
+    
+    if (message.includes('network') || message.includes('fetch')) {
       throw new Error("Erro de rede: Verifique sua internet.");
     }
     
-    throw new Error("O mestre teve um problema na conexão. Tente novamente.");
+    throw new Error("O mestre teve um problema técnico. Tente novamente.");
   }
 };

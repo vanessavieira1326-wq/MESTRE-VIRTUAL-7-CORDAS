@@ -4,10 +4,14 @@ import { getTeacherInsights, ChatMessage } from '../services/geminiService';
 import { 
   Sparkles, Send, Loader2, Zap, Copy, Check, 
   Mic, MicOff, Music, Trash2, Volume2, VolumeX,
-  MessageCircle, Headset, AlertCircle
+  MessageCircle, Headset, AlertCircle, RefreshCw
 } from 'lucide-react';
 
-const AITeacher: React.FC = () => {
+interface AITeacherProps {
+  onResetKey?: () => void;
+}
+
+const AITeacher: React.FC<AITeacherProps> = ({ onResetKey }) => {
   const [topic, setTopic] = useState('');
   const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -53,7 +57,6 @@ const AITeacher: React.FC = () => {
     synthRef.current.speak(utterance);
   };
 
-  // Configuração avançada de Reconhecimento de Voz
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -75,23 +78,16 @@ const AITeacher: React.FC = () => {
       };
 
       recognition.onend = () => {
-        // Reinicia automaticamente se o usuário não tiver desligado manualmente
         if (isListeningManualRef.current) {
-          try {
-            recognition.start();
-          } catch (e) {
-            console.error("Erro ao reiniciar áudio:", e);
-          }
+          try { recognition.start(); } catch (e) {}
         } else {
           setIsListening(false);
         }
       };
 
       recognition.onerror = (event: any) => {
-        if (event.error === 'network') {
-          setConnectionError("Erro de microfone: Verifique sua conexão.");
-        }
-        console.error("Speech Recognition Error:", event.error);
+        if (event.error === 'network') setConnectionError("Microfone: Falha na rede.");
+        console.error("Recognition Error:", event.error);
       };
 
       recognitionRef.current = recognition;
@@ -100,7 +96,7 @@ const AITeacher: React.FC = () => {
 
   const toggleListening = useCallback(() => {
     if (!recognitionRef.current) {
-      alert("Microfone não suportado neste navegador.");
+      alert("Microfone não suportado.");
       return;
     }
 
@@ -115,7 +111,6 @@ const AITeacher: React.FC = () => {
       try {
         recognitionRef.current.start();
       } catch (e) {
-        console.error("Start Error:", e);
         setIsListening(false);
         isListeningManualRef.current = false;
       }
@@ -151,10 +146,14 @@ const AITeacher: React.FC = () => {
       const responseText = await getTeacherInsights(textToSearch, currentHistory);
       setMessages(prev => [...prev, { role: 'model', text: responseText }]);
     } catch (err: any) {
-      setConnectionError(err.message || "Erro ao conectar com o mestre.");
-      // Removemos a mensagem do usuário que falhou para permitir tentar de novo
-      setMessages(prev => prev.slice(0, -1));
-      setTopic(textToSearch); // Devolve o texto ao input para re-tentativa
+      if (err.message === "REAUTH_REQUIRED") {
+        setConnectionError("Sua chave de acesso expirou ou é inválida.");
+        if (onResetKey) onResetKey();
+      } else {
+        setConnectionError(err.message || "Erro na conexão.");
+        setMessages(prev => prev.slice(0, -1));
+        setTopic(textToSearch);
+      }
     } finally {
       setLoading(false);
     }
@@ -162,12 +161,11 @@ const AITeacher: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-3 w-full">
-      {/* Aviso de Erro de Conexão */}
       {connectionError && (
-        <div className="bg-red-500/10 border border-red-500/50 p-3 rounded-xl flex items-center gap-3 text-red-200 text-xs animate-in fade-in slide-in-from-top-2">
+        <div className="bg-red-500/10 border border-red-500/50 p-3 rounded-xl flex items-center gap-3 text-red-200 text-[10px] animate-in fade-in slide-in-from-top-2 uppercase font-black tracking-widest">
           <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
           <div className="flex-1">{connectionError}</div>
-          <button onClick={() => setConnectionError(null)} className="font-bold uppercase text-[9px] bg-red-500/20 px-2 py-1 rounded">Fechar</button>
+          <button onClick={() => setConnectionError(null)} className="bg-red-500/20 px-2 py-1 rounded">X</button>
         </div>
       )}
 
@@ -179,7 +177,7 @@ const AITeacher: React.FC = () => {
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
-              placeholder="Fale ou digite sua dúvida..."
+              placeholder="Pergunte ao Mestre..."
               className="flex-1 bg-transparent border-none py-2 text-white placeholder:text-slate-600 focus:ring-0 outline-none font-bold text-base px-2"
             />
             <button 
@@ -197,7 +195,7 @@ const AITeacher: React.FC = () => {
             disabled={loading || !topic.trim()}
             className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-20 text-white py-3 rounded-xl transition-all flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px]"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             Consultar Mestre
           </button>
         </div>
@@ -209,7 +207,7 @@ const AITeacher: React.FC = () => {
             <Sparkles className="text-amber-500 w-4 h-4" />
             <span className="text-[10px] font-black uppercase tracking-widest text-white">Aula Particular</span>
           </div>
-          <button onClick={() => {setMessages([]); setConnectionError(null);}} className="p-1.5 text-slate-600 hover:text-red-500 transition-colors">
+          <button onClick={() => setMessages([])} className="p-1.5 text-slate-600 hover:text-red-500 transition-colors">
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
@@ -249,9 +247,9 @@ const AITeacher: React.FC = () => {
           ))}
           {loading && (
             <div className="flex justify-start">
-              <div className="bg-white/5 p-3 rounded-xl flex items-center gap-3 border border-amber-500/10 shadow-inner">
+              <div className="bg-white/5 p-3 rounded-xl flex items-center gap-3 border border-amber-500/10">
                 <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-amber-900 animate-pulse">O mestre está formulando a resposta...</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-900">O mestre está formulando a resposta...</span>
               </div>
             </div>
           )}

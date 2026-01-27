@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import AITeacher from './components/AITeacher';
-import { ShieldCheck, Music2, Star, Zap, Music, Download } from 'lucide-react';
+import { ShieldCheck, Music2, Star, Zap, Music, Download, Key, ExternalLink } from 'lucide-react';
 
 const musicalNotationFragments = [
   "♩=120", "♫ ♬ ♭", "♯C7M(9)", "♭9/♯11", "|--7--5--|", "𝄞 𝄢", "A/G#", "D7(b9)", "G/B", "E7/D", "|--0-h-2--|", "p.i.m.a", "7ª Corda (C)", "|--x--|", "B7(13)", "Cm7(b5)"
@@ -45,15 +45,35 @@ const AppIcon: React.FC = () => (
 const App: React.FC = () => {
   const [description, setDescription] = useState("");
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
 
   useEffect(() => {
     setDescription(welcomeTexts[Math.floor(Math.random() * welcomeTexts.length)]);
     
+    // Verifica se já existe uma chave selecionada
+    const checkKey = async () => {
+      if (window.aistudio?.hasSelectedApiKey) {
+        const has = await window.aistudio.hasSelectedApiKey();
+        setHasApiKey(has);
+      } else {
+        // Fallback para ambientes onde o seletor não está disponível (usa process.env)
+        setHasApiKey(true);
+      }
+    };
+    checkKey();
+
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
     });
   }, []);
+
+  const handleSelectKey = async () => {
+    if (window.aistudio?.openSelectKey) {
+      await window.aistudio.openSelectKey();
+      setHasApiKey(true); // Assume sucesso conforme instrução para evitar race condition
+    }
+  };
 
   const handleInstall = async () => {
     if (deferredPrompt) {
@@ -62,6 +82,42 @@ const App: React.FC = () => {
       if (outcome === 'accepted') setDeferredPrompt(null);
     }
   };
+
+  if (hasApiKey === false) {
+    return (
+      <div className="min-h-screen bg-[#0c0604] flex items-center justify-center p-6 font-sans">
+        <div className="max-w-md w-full bg-[#1a0f0a] border border-[#3d2516] rounded-[2.5rem] p-8 text-center shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]"></div>
+          <div className="relative z-10 flex flex-col items-center gap-6">
+            <AppIcon />
+            <div>
+              <h1 className="text-2xl font-black text-white uppercase tracking-tighter mb-2 italic">Mestre Virtual 7C</h1>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Para acessar o conhecimento técnico do Mestre, você precisa vincular sua chave de API do Google Gemini.
+              </p>
+            </div>
+            
+            <button 
+              onClick={handleSelectKey}
+              className="w-full bg-amber-600 hover:bg-amber-500 text-white py-4 rounded-2xl flex items-center justify-center gap-3 font-black uppercase tracking-widest text-xs shadow-lg transition-all"
+            >
+              <Key className="w-5 h-5" />
+              Configurar Chave API
+            </button>
+
+            <a 
+              href="https://ai.google.dev/gemini-api/docs/billing" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-[10px] text-slate-500 hover:text-amber-500 uppercase font-bold tracking-widest transition-colors"
+            >
+              Documentação de Faturamento <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0c0604] text-slate-100 flex flex-col font-sans overflow-x-hidden selection:bg-amber-500/40">
@@ -96,7 +152,7 @@ const App: React.FC = () => {
       </header>
 
       <main className="relative z-10 flex-1 w-full max-w-4xl mx-auto px-4 py-4 md:py-8 flex flex-col gap-6">
-        <AITeacher />
+        <AITeacher onResetKey={() => setHasApiKey(false)} />
 
         <section className="bg-white/5 p-5 rounded-[1.5rem] border border-white/5">
           <p className="text-slate-400 text-sm md:text-lg leading-relaxed italic border-l-2 border-amber-600 pl-4">
