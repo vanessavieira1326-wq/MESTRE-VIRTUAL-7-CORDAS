@@ -4,13 +4,14 @@ import { getTeacherInsights, ChatMessage } from '../services/geminiService';
 import { 
   Sparkles, Send, Loader2, Zap, Copy, Check, 
   Mic, MicOff, Music, Trash2, Volume2, VolumeX,
-  MessageCircle, Headset
+  MessageCircle, Headset, AlertCircle
 } from 'lucide-react';
 
 const AITeacher: React.FC = () => {
   const [topic, setTopic] = useState('');
   const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
@@ -18,6 +19,7 @@ const AITeacher: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
+  const isListeningRef = useRef(false); // Ref para rastrear estado real e evitar closures obsoletas
 
   const WHATSAPP_NUMBER = "5519987719618";
 
@@ -51,21 +53,48 @@ const AITeacher: React.FC = () => {
     synthRef.current.speak(utterance);
   };
 
+  // Configuração do Speech Recognition com modo contínuo
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
+      recognition.continuous = true; // Mantém ouvindo mesmo após pausas
+      recognition.interimResults = true; // Mostra resultados parciais
       recognition.lang = 'pt-BR';
 
       recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        if (transcript) setTopic(prev => (prev ? prev + ' ' + transcript : transcript));
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+        if (finalTranscript) {
+          setTopic(prev => (prev ? prev + ' ' + finalTranscript.trim() : finalTranscript.trim()));
+        }
       };
 
-      recognition.onend = () => setIsListening(false);
-      recognition.onerror = () => setIsListening(false);
+      recognition.onend = () => {
+        // Se o estado ainda for 'ouvindo', reinicia automaticamente (comum em browsers mobile)
+        if (isListeningRef.current) {
+          try {
+            recognition.start();
+          } catch (e) {
+            console.error("Erro ao reiniciar reconhecimento:", e);
+            setIsListening(false);
+            isListeningRef.current = false;
+          }
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Erro no reconhecimento de voz:', event.error);
+        if (event.error !== 'no-speech') {
+          setIsListening(false);
+          isListeningRef.current = false;
+        }
+      };
+
       recognitionRef.current = recognition;
     }
   }, []);
@@ -75,11 +104,22 @@ const AITeacher: React.FC = () => {
       alert("Microfone não suportado neste navegador.");
       return;
     }
+
     if (isListening) {
+      isListeningRef.current = false;
+      setIsListening(false);
       recognitionRef.current.stop();
     } else {
+      isListeningRef.current = true;
       setIsListening(true);
-      try { recognitionRef.current.start(); } catch { setIsListening(false); }
+      setError(null);
+      try {
+        recognitionRef.current.start();
+      } catch (e) {
+        console.error("Falha ao iniciar áudio:", e);
+        setIsListening(false);
+        isListeningRef.current = false;
+      }
     }
   }, [isListening]);
 
@@ -91,7 +131,12 @@ const AITeacher: React.FC = () => {
     const textToSearch = customPrompt || topic;
     if (!textToSearch.trim() || loading) return;
 
-    if (isListening) recognitionRef.current?.stop();
+    setError(null);
+    if (isListening) {
+      isListeningRef.current = false;
+      setIsListening(false);
+      recognitionRef.current?.stop();
+    }
     if (synthRef.current) synthRef.current.cancel();
 
     const newUserMessage = { role: 'user' as const, text: textToSearch };
@@ -107,7 +152,7 @@ const AITeacher: React.FC = () => {
       const responseText = await getTeacherInsights(textToSearch, currentHistory);
       setMessages(prev => [...prev, { role: 'model', text: responseText }]);
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'model', text: "Erro na conexão. Tente novamente." }]);
+      setError("Falha na comunicação com o mestre. Verifique sua internet.");
     } finally {
       setLoading(false);
     }
@@ -115,6 +160,15 @@ const AITeacher: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-3 w-full">
+      {/* Area de Alerta de Erro */}
+      {error && (
+        <div className="bg-red-900/20 border border-red-500/30 p-3 rounded-xl flex items-center gap-2 text-red-200 text-xs animate-pulse">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ml-auto underline font-bold uppercase text-[9px]">Fechar</button>
+        </div>
+      )}
+
       <div className="w-full space-y-3">
         <div className="flex flex-col gap-2 p-2 bg-black/60 border border-white/10 rounded-2xl shadow-xl">
           <div className="flex items-center gap-2">
@@ -128,7 +182,8 @@ const AITeacher: React.FC = () => {
             />
             <button 
               onClick={toggleListening}
-              className={`p-2.5 rounded-xl transition-all ${isListening ? 'bg-red-600 animate-pulse' : 'bg-white/5 text-amber-500'}`}
+              title={isListening ? "Parar de ouvir" : "Ouvir continuamente"}
+              className={`p-2.5 rounded-xl transition-all ${isListening ? 'bg-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'bg-white/5 text-amber-500'}`}
             >
               {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </button>
@@ -139,7 +194,7 @@ const AITeacher: React.FC = () => {
             className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-20 text-white py-3 rounded-xl transition-all flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px]"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            Enviar
+            Enviar Consulta
           </button>
         </div>
       </div>
@@ -150,18 +205,25 @@ const AITeacher: React.FC = () => {
             <Sparkles className="text-amber-500 w-4 h-4" />
             <span className="text-[10px] font-black uppercase tracking-widest text-white">Diálogo Técnico</span>
           </div>
-          <button onClick={() => setMessages([])} className="p-1.5 text-slate-600 hover:text-red-500">
+          <button onClick={() => { setMessages([]); setError(null); }} className="p-1.5 text-slate-600 hover:text-red-500">
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+          {messages.length === 0 && !loading && (
+            <div className="h-full flex flex-col items-center justify-center opacity-20 text-center grayscale">
+              <Music className="w-12 h-12 mb-2 text-amber-900" />
+              <p className="text-[10px] font-black uppercase tracking-widest">Aguardando seu comando</p>
+            </div>
+          )}
+
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[95%] p-4 rounded-xl ${
+              <div className={`max-w-[95%] p-4 rounded-xl shadow-lg ${
                 msg.role === 'user' 
-                ? 'bg-amber-900/40 text-white border border-amber-600/20' 
-                : 'bg-white/5 text-slate-300 text-sm md:text-base leading-relaxed whitespace-pre-wrap'
+                ? 'bg-amber-900/40 text-white border border-amber-600/20 rounded-tr-none' 
+                : 'bg-white/5 text-slate-300 text-sm md:text-base leading-relaxed whitespace-pre-wrap rounded-tl-none border border-white/5'
               }`}>
                 {msg.text}
                 {msg.role === 'model' && (
@@ -183,9 +245,9 @@ const AITeacher: React.FC = () => {
           ))}
           {loading && (
             <div className="flex justify-start">
-              <div className="bg-white/5 p-3 rounded-xl flex items-center gap-2">
+              <div className="bg-white/5 p-3 rounded-xl flex items-center gap-2 border border-amber-600/10">
                 <Loader2 className="w-3 h-3 text-amber-600 animate-spin" />
-                <span className="text-[9px] font-black uppercase tracking-widest text-amber-700">O Mestre está pensando...</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-amber-700">Conectando ao Mestre...</span>
               </div>
             </div>
           )}
@@ -195,7 +257,7 @@ const AITeacher: React.FC = () => {
 
       <button 
         onClick={() => window.open(`https://wa.me/${WHATSAPP_NUMBER}`, '_blank')} 
-        className="flex items-center justify-between p-3 bg-green-950/20 border border-green-900/30 rounded-xl hover:bg-green-900/40 transition-all"
+        className="flex items-center justify-between p-3 bg-green-950/20 border border-green-900/30 rounded-xl hover:bg-green-900/40 transition-all group"
       >
         <div className="flex items-center gap-2">
           <Headset className="w-4 h-4 text-green-500" />
@@ -203,7 +265,7 @@ const AITeacher: React.FC = () => {
             <h4 className="text-[10px] font-black text-white uppercase tracking-wider">Suporte Direto</h4>
           </div>
         </div>
-        <MessageCircle className="w-4 h-4 text-green-500" />
+        <MessageCircle className="w-4 h-4 text-green-500 group-hover:scale-110 transition-transform" />
       </button>
     </div>
   );
