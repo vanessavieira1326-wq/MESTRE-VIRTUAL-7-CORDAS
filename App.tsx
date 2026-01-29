@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import AITeacher from './components/AITeacher';
-import { ShieldCheck, Music2, Star, Zap, Music, Download, Key, ExternalLink } from 'lucide-react';
+import { ShieldCheck, Music2, Star, Zap, Music, Download, Key, ExternalLink, Globe, ArrowRight, Info } from 'lucide-react';
 
 const musicalNotationFragments = [
   "♩=120", "♫ ♬ ♭", "♯C7M(9)", "♭9/♯11", "|--7--5--|", "𝄞 𝄢", "A/G#", "D7(b9)", "G/B", "E7/D", "|--0-h-2--|", "p.i.m.a", "7ª Corda (C)", "|--x--|", "B7(13)", "Cm7(b5)"
@@ -50,13 +50,12 @@ const App: React.FC = () => {
   useEffect(() => {
     setDescription(welcomeTexts[Math.floor(Math.random() * welcomeTexts.length)]);
     
-    // Verifica se já existe uma chave selecionada
     const checkKey = async () => {
       if (window.aistudio?.hasSelectedApiKey) {
         const has = await window.aistudio.hasSelectedApiKey();
         setHasApiKey(has);
       } else {
-        // Fallback para ambientes onde o seletor não está disponível (usa process.env)
+        // Fallback para ambiente de desenvolvimento local ou se o seletor não estiver disponível
         setHasApiKey(true);
       }
     };
@@ -71,7 +70,8 @@ const App: React.FC = () => {
   const handleSelectKey = async () => {
     if (window.aistudio?.openSelectKey) {
       await window.aistudio.openSelectKey();
-      setHasApiKey(true); // Assume sucesso conforme instrução para evitar race condition
+      // Conforme as regras, assumimos sucesso imediatamente para evitar race condition
+      setHasApiKey(true);
     }
   };
 
@@ -85,33 +85,69 @@ const App: React.FC = () => {
 
   if (hasApiKey === false) {
     return (
-      <div className="min-h-screen bg-[#0c0604] flex items-center justify-center p-6 font-sans">
-        <div className="max-w-md w-full bg-[#1a0f0a] border border-[#3d2516] rounded-[2.5rem] p-8 text-center shadow-2xl relative overflow-hidden">
+      <div className="min-h-screen bg-[#0c0604] flex items-center justify-center p-4 md:p-6 font-sans">
+        <div className="max-w-xl w-full bg-[#1a0f0a] border border-[#3d2516] rounded-[2.5rem] p-6 md:p-10 text-center shadow-2xl relative overflow-hidden">
           <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]"></div>
-          <div className="relative z-10 flex flex-col items-center gap-6">
+          
+          <div className="relative z-10 flex flex-col items-center gap-8">
             <AppIcon />
-            <div>
-              <h1 className="text-2xl font-black text-white uppercase tracking-tighter mb-2 italic">Mestre Virtual 7C</h1>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                Para acessar o conhecimento técnico do Mestre, você precisa vincular sua chave de API do Google Gemini.
+            
+            <div className="space-y-2">
+              <h1 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter italic">Mestre Virtual 7C</h1>
+              <div className="h-1 w-20 bg-amber-600 mx-auto rounded-full"></div>
+              <p className="text-slate-400 text-sm md:text-base leading-relaxed pt-2">
+                O mestre está pronto para ensinar, mas precisamos sintonizar os bordões.
+                Siga os passos abaixo para ativar a inteligência artificial:
               </p>
             </div>
-            
-            <button 
-              onClick={handleSelectKey}
-              className="w-full bg-amber-600 hover:bg-amber-500 text-white py-4 rounded-2xl flex items-center justify-center gap-3 font-black uppercase tracking-widest text-xs shadow-lg transition-all"
-            >
-              <Key className="w-5 h-5" />
-              Configurar Chave API
-            </button>
+
+            <div className="w-full space-y-4 text-left">
+              <div className="flex gap-4 p-4 bg-white/5 border border-white/5 rounded-2xl items-start group hover:border-amber-600/30 transition-all">
+                <div className="w-8 h-8 rounded-full bg-amber-600 flex items-center justify-center text-white font-black shrink-0">1</div>
+                <div>
+                  <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-1">Obtenha sua Chave</h3>
+                  <p className="text-xs text-slate-500 mb-3">Acesse o Google AI Studio e gere uma chave de API gratuita.</p>
+                  <a 
+                    href="https://aistudio.google.com/app/apikey" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 bg-amber-600/10 hover:bg-amber-600/20 text-amber-500 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border border-amber-600/20"
+                  >
+                    Abrir Google AI Studio <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+
+              <div className="flex gap-4 p-4 bg-white/5 border border-white/5 rounded-2xl items-start group hover:border-amber-600/30 transition-all">
+                <div className="w-8 h-8 rounded-full bg-amber-600 flex items-center justify-center text-white font-black shrink-0">2</div>
+                <div className="flex-1">
+                  <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-1">Vincule ao Aplicativo</h3>
+                  <p className="text-xs text-slate-500 mb-4">Clique no botão abaixo para abrir o seletor e colar sua chave.</p>
+                  <button 
+                    onClick={handleSelectKey}
+                    className="w-full bg-amber-600 hover:bg-amber-500 text-white py-4 rounded-xl flex items-center justify-center gap-3 font-black uppercase tracking-widest text-xs shadow-lg transition-all active:scale-95"
+                  >
+                    <Key className="w-5 h-5" />
+                    Configurar Chave API
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-amber-900/10 border border-amber-600/20 p-4 rounded-2xl flex items-start gap-3 text-left">
+              <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-[10px] text-amber-200/60 leading-normal">
+                <b>Nota Técnica:</b> Sua chave é armazenada localmente no seu navegador e é usada apenas para as consultas de áudio e texto com o Mestre. Recomenda-se o uso de um projeto com faturamento ativado para evitar limites de uso.
+              </p>
+            </div>
 
             <a 
               href="https://ai.google.dev/gemini-api/docs/billing" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="flex items-center gap-2 text-[10px] text-slate-500 hover:text-amber-500 uppercase font-bold tracking-widest transition-colors"
+              className="text-[10px] text-slate-500 hover:text-amber-500 uppercase font-bold tracking-[0.2em] transition-colors flex items-center gap-1"
             >
-              Documentação de Faturamento <ExternalLink className="w-3 h-3" />
+              Documentação de Faturamento <ArrowRight className="w-3 h-3" />
             </a>
           </div>
         </div>
@@ -154,7 +190,7 @@ const App: React.FC = () => {
       <main className="relative z-10 flex-1 w-full max-w-4xl mx-auto px-4 py-4 md:py-8 flex flex-col gap-6">
         <AITeacher onResetKey={() => setHasApiKey(false)} />
 
-        <section className="bg-white/5 p-5 rounded-[1.5rem] border border-white/5">
+        <section className="bg-white/5 p-5 rounded-[1.5rem] border border-white/5 shadow-inner">
           <p className="text-slate-400 text-sm md:text-lg leading-relaxed italic border-l-2 border-amber-600 pl-4">
             "{description}"
           </p>
@@ -162,12 +198,12 @@ const App: React.FC = () => {
 
         <footer className="grid grid-cols-1 md:grid-cols-3 gap-4 py-6 border-t border-white/5">
           {[
-            { icon: ShieldCheck, title: "Bordão", desc: "Base rítmica sólida." },
-            { icon: Star, title: "Harmonia", desc: "Virtuosismo puro." },
-            { icon: Zap, title: "IA 7C", desc: "Tradição digital." }
+            { icon: ShieldCheck, title: "Bordão", desc: "Base rítmica sólida e clara." },
+            { icon: Star, title: "Harmonia", desc: "Virtuosismo e bom gosto." },
+            { icon: Zap, title: "IA 7C", desc: "Tradição em formato digital." }
           ].map((item, idx) => (
-            <div key={idx} className="flex items-center gap-3 p-3 bg-black/20 rounded-xl border border-white/5">
-              <item.icon className="w-5 h-5 text-amber-500 shrink-0" />
+            <div key={idx} className="flex items-center gap-3 p-3 bg-black/20 rounded-xl border border-white/5 hover:bg-white/5 transition-colors group">
+              <item.icon className="w-5 h-5 text-amber-500 shrink-0 group-hover:scale-110 transition-transform" />
               <div>
                 <h4 className="font-bold text-slate-100 text-[10px] uppercase tracking-wider">{item.title}</h4>
                 <p className="text-[9px] text-slate-500">{item.desc}</p>

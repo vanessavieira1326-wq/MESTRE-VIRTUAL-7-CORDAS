@@ -79,15 +79,22 @@ const AITeacher: React.FC<AITeacherProps> = ({ onResetKey }) => {
 
       recognition.onend = () => {
         if (isListeningManualRef.current) {
-          try { recognition.start(); } catch (e) {}
+          try {
+            recognition.start();
+          } catch (e) {
+            console.error("Erro ao reiniciar áudio:", e);
+            setIsListening(false);
+          }
         } else {
           setIsListening(false);
         }
       };
 
       recognition.onerror = (event: any) => {
-        if (event.error === 'network') setConnectionError("Microfone: Falha na rede.");
-        console.error("Recognition Error:", event.error);
+        console.error("Erro de áudio:", event.error);
+        if (event.error === 'network') {
+          setConnectionError("Erro de rede no microfone.");
+        }
       };
 
       recognitionRef.current = recognition;
@@ -96,7 +103,7 @@ const AITeacher: React.FC<AITeacherProps> = ({ onResetKey }) => {
 
   const toggleListening = useCallback(() => {
     if (!recognitionRef.current) {
-      alert("Microfone não suportado.");
+      alert("Microfone não suportado no seu navegador.");
       return;
     }
 
@@ -111,6 +118,7 @@ const AITeacher: React.FC<AITeacherProps> = ({ onResetKey }) => {
       try {
         recognitionRef.current.start();
       } catch (e) {
+        console.error("Falha ao iniciar microfone:", e);
         setIsListening(false);
         isListeningManualRef.current = false;
       }
@@ -147,11 +155,13 @@ const AITeacher: React.FC<AITeacherProps> = ({ onResetKey }) => {
       setMessages(prev => [...prev, { role: 'model', text: responseText }]);
     } catch (err: any) {
       if (err.message === "REAUTH_REQUIRED") {
-        setConnectionError("Sua chave de acesso expirou ou é inválida.");
-        if (onResetKey) onResetKey();
+        setConnectionError("Erro de Permissão: Selecione uma chave de API válida.");
+        if (onResetKey) {
+          setTimeout(() => onResetKey(), 2000); // Dá tempo do usuário ler o erro antes de resetar
+        }
       } else {
-        setConnectionError(err.message || "Erro na conexão.");
-        setMessages(prev => prev.slice(0, -1));
+        setConnectionError(err.message || "Erro inesperado ao conectar.");
+        setMessages(prev => prev.slice(0, -1)); // Remove a última mensagem para permitir re-envio
         setTopic(textToSearch);
       }
     } finally {
@@ -162,10 +172,10 @@ const AITeacher: React.FC<AITeacherProps> = ({ onResetKey }) => {
   return (
     <div className="flex flex-col gap-3 w-full">
       {connectionError && (
-        <div className="bg-red-500/10 border border-red-500/50 p-3 rounded-xl flex items-center gap-3 text-red-200 text-[10px] animate-in fade-in slide-in-from-top-2 uppercase font-black tracking-widest">
+        <div className="bg-red-500/10 border border-red-500/50 p-3 rounded-xl flex items-center gap-3 text-red-200 text-[11px] animate-in fade-in slide-in-from-top-2 font-black uppercase tracking-widest">
           <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
-          <div className="flex-1">{connectionError}</div>
-          <button onClick={() => setConnectionError(null)} className="bg-red-500/20 px-2 py-1 rounded">X</button>
+          <div className="flex-1 leading-tight">{connectionError}</div>
+          <button onClick={() => setConnectionError(null)} className="bg-red-500/20 px-2 py-1 rounded hover:bg-red-500/40 transition-colors">OK</button>
         </div>
       )}
 
@@ -183,7 +193,7 @@ const AITeacher: React.FC<AITeacherProps> = ({ onResetKey }) => {
             <button 
               onClick={toggleListening}
               className={`p-2.5 rounded-xl transition-all relative ${
-                isListening ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'bg-white/5 text-amber-500'
+                isListening ? 'bg-red-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.6)] scale-105' : 'bg-white/5 text-amber-500 hover:bg-white/10'
               }`}
             >
               {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
@@ -193,51 +203,59 @@ const AITeacher: React.FC<AITeacherProps> = ({ onResetKey }) => {
           <button 
             onClick={() => handleAsk()}
             disabled={loading || !topic.trim()}
-            className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-20 text-white py-3 rounded-xl transition-all flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px]"
+            className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-20 text-white py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px] shadow-lg active:scale-95"
           >
             {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            Consultar Mestre
+            Consultar o Mestre
           </button>
         </div>
       </div>
 
-      <div className="bg-black/80 border border-white/10 rounded-[1.5rem] flex flex-col h-[380px] md:h-[500px] overflow-hidden">
+      <div className="bg-black/80 border border-white/10 rounded-[1.5rem] flex flex-col h-[380px] md:h-[500px] overflow-hidden shadow-2xl">
         <div className="p-3 border-b border-white/5 flex items-center justify-between bg-white/5">
           <div className="flex items-center gap-2">
             <Sparkles className="text-amber-500 w-4 h-4" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-white">Aula Particular</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-white/80">Aula Particular de 7 Cordas</span>
           </div>
           <button onClick={() => setMessages([])} className="p-1.5 text-slate-600 hover:text-red-500 transition-colors">
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-gradient-to-b from-transparent to-black/20">
           {messages.length === 0 && !loading && (
-            <div className="h-full flex flex-col items-center justify-center opacity-10 text-center">
+            <div className="h-full flex flex-col items-center justify-center opacity-10 text-center select-none">
               <Music className="w-16 h-16 mb-4" />
-              <p className="text-xs font-black uppercase tracking-[0.3em]">Mestre em Silêncio</p>
+              <p className="text-xs font-black uppercase tracking-[0.4em]">Silêncio na Sala</p>
             </div>
           )}
 
           {messages.map((msg, idx) => (
-            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[95%] p-4 rounded-xl shadow-md ${
+            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
+              <div className={`max-w-[95%] p-4 rounded-xl shadow-md border ${
                 msg.role === 'user' 
-                ? 'bg-amber-900/30 text-white border border-amber-600/20 rounded-tr-none' 
-                : 'bg-white/5 text-slate-300 text-sm md:text-base leading-relaxed whitespace-pre-wrap rounded-tl-none border border-white/5'
+                ? 'bg-amber-900/30 text-white border-amber-600/20 rounded-tr-none' 
+                : 'bg-white/5 text-slate-300 text-sm md:text-base leading-relaxed whitespace-pre-wrap rounded-tl-none border-white/5'
               }`}>
                 {msg.text}
                 {msg.role === 'model' && (
                   <div className="mt-3 flex gap-2 justify-end border-t border-white/5 pt-2">
-                    <button onClick={() => speak(msg.text, idx)} className="p-1.5 bg-white/5 rounded-lg text-slate-400 hover:text-amber-500 transition-colors">
+                    <button 
+                      onClick={() => speak(msg.text, idx)} 
+                      className="p-2 bg-white/5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-white/10 transition-all"
+                      title="Ouvir Resposta"
+                    >
                       {speakingIndex === idx ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
-                    <button onClick={() => {
-                      navigator.clipboard.writeText(msg.text);
-                      setCopiedIndex(idx);
-                      setTimeout(() => setCopiedIndex(null), 2000);
-                    }} className="p-1.5 bg-white/5 rounded-lg text-slate-400 hover:text-amber-500">
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(msg.text);
+                        setCopiedIndex(idx);
+                        setTimeout(() => setCopiedIndex(null), 2000);
+                      }} 
+                      className="p-2 bg-white/5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-white/10 transition-all"
+                      title="Copiar Texto"
+                    >
                       {copiedIndex === idx ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
@@ -245,11 +263,12 @@ const AITeacher: React.FC<AITeacherProps> = ({ onResetKey }) => {
               </div>
             </div>
           ))}
+          
           {loading && (
-            <div className="flex justify-start">
-              <div className="bg-white/5 p-3 rounded-xl flex items-center gap-3 border border-amber-500/10">
-                <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-amber-900">O mestre está formulando a resposta...</span>
+            <div className="flex justify-start animate-pulse">
+              <div className="bg-white/5 p-4 rounded-xl flex items-center gap-3 border border-amber-500/10 shadow-lg">
+                <Loader2 className="w-5 h-5 text-amber-600 animate-spin" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-900">O Mestre está consultando os bordões...</span>
               </div>
             </div>
           )}
@@ -259,15 +278,18 @@ const AITeacher: React.FC<AITeacherProps> = ({ onResetKey }) => {
 
       <button 
         onClick={() => window.open(`https://wa.me/${WHATSAPP_NUMBER}`, '_blank')} 
-        className="flex items-center justify-between p-3 bg-green-950/20 border border-green-900/30 rounded-xl hover:bg-green-900/40 transition-all group"
+        className="flex items-center justify-between p-4 bg-green-950/10 border border-green-900/20 rounded-2xl hover:bg-green-900/20 transition-all group active:scale-95"
       >
-        <div className="flex items-center gap-2">
-          <Headset className="w-4 h-4 text-green-500" />
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+            <Headset className="w-4 h-4 text-green-500" />
+          </div>
           <div className="text-left">
-            <h4 className="text-[10px] font-black text-white uppercase tracking-wider">Mentoria Vip</h4>
+            <h4 className="text-[10px] font-black text-white uppercase tracking-[0.1em]">Suporte Técnico Humano</h4>
+            <p className="text-[9px] text-slate-500">Dúvidas sobre o app ou violão?</p>
           </div>
         </div>
-        <MessageCircle className="w-4 h-4 text-green-500 group-hover:scale-110 transition-transform" />
+        <MessageCircle className="w-5 h-5 text-green-500 group-hover:scale-110 transition-transform" />
       </button>
     </div>
   );

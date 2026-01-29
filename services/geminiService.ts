@@ -26,11 +26,11 @@ ESTRUTURA DE TABLATURA (7 CORDAS):
 `;
 
 export const getTeacherInsights = async (prompt: string, history: ChatMessage[] = []) => {
-  // Criamos uma nova instância a cada chamada para usar a chave mais atualizada do process.env.API_KEY
+  // Sempre criar uma nova instância para capturar a chave de API mais recente do ambiente
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
-    const optimizedHistory = history.slice(-8);
+    const optimizedHistory = history.slice(-6); // Histórico mais curto para maior estabilidade
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -48,23 +48,29 @@ export const getTeacherInsights = async (prompt: string, history: ChatMessage[] 
     const text = response.text;
     
     if (!text) {
-      throw new Error("Resposta vazia");
+      throw new Error("O mestre não gerou uma resposta válida.");
     }
 
     return text;
   } catch (error: any) {
-    console.error("AI Connection Error:", error);
+    console.error("Erro detalhado na conexão Gemini:", error);
     
-    const message = error.message?.toLowerCase() || "";
+    const errorMessage = error.message || "";
     
-    if (message.includes('not found') || message.includes('api_key') || message.includes('401') || message.includes('403')) {
+    // Erros que exigem nova seleção de chave (404, 401, 403)
+    if (
+      errorMessage.includes('Requested entity was not found') || 
+      errorMessage.includes('API key not valid') ||
+      errorMessage.includes('403') ||
+      errorMessage.includes('401')
+    ) {
       throw new Error("REAUTH_REQUIRED");
     }
     
-    if (message.includes('network') || message.includes('fetch')) {
-      throw new Error("Erro de rede: Verifique sua internet.");
+    if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
+      throw new Error("Falha na conexão de rede. Verifique seu Wi-Fi ou dados móveis.");
     }
     
-    throw new Error("O mestre teve um problema técnico. Tente novamente.");
+    throw new Error(error.message || "Ocorreu um erro inesperado ao consultar o mestre.");
   }
 };
