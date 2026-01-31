@@ -26,11 +26,11 @@ ESTRUTURA DE TABLATURA (7 CORDAS):
 `;
 
 export const getTeacherInsights = async (prompt: string, history: ChatMessage[] = []) => {
-  // Sempre criar uma nova instância para capturar a chave de API mais recente do ambiente
+  // Inicialização dentro da função para garantir o uso da chave configurada no ambiente
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
-    const optimizedHistory = history.slice(-6); // Histórico mais curto para maior estabilidade
+    const optimizedHistory = history.slice(-6);
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -45,6 +45,7 @@ export const getTeacherInsights = async (prompt: string, history: ChatMessage[] 
       },
     });
 
+    // Acesso direto à propriedade .text conforme as novas diretrizes
     const text = response.text;
     
     if (!text) {
@@ -53,11 +54,10 @@ export const getTeacherInsights = async (prompt: string, history: ChatMessage[] 
 
     return text;
   } catch (error: any) {
-    console.error("Erro detalhado na conexão Gemini:", error);
+    console.error("Erro na conexão Gemini:", error);
     
     const errorMessage = error.message || "";
     
-    // Erros que exigem nova seleção de chave (404, 401, 403)
     if (
       errorMessage.includes('Requested entity was not found') || 
       errorMessage.includes('API key not valid') ||
@@ -67,10 +67,6 @@ export const getTeacherInsights = async (prompt: string, history: ChatMessage[] 
       throw new Error("REAUTH_REQUIRED");
     }
     
-    if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
-      throw new Error("Falha na conexão de rede. Verifique seu Wi-Fi ou dados móveis.");
-    }
-    
-    throw new Error(error.message || "Ocorreu um erro inesperado ao consultar o mestre.");
+    throw new Error(error.message || "Ocorreu um erro ao consultar o mestre.");
   }
 };
