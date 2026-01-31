@@ -7,11 +7,7 @@ import {
   MessageCircle, Headset, AlertCircle, RefreshCw
 } from 'lucide-react';
 
-interface AITeacherProps {
-  onResetKey?: () => void;
-}
-
-const AITeacher: React.FC<AITeacherProps> = ({ onResetKey }) => {
+const AITeacher: React.FC = () => {
   const [topic, setTopic] = useState('');
   const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -154,16 +150,9 @@ const AITeacher: React.FC<AITeacherProps> = ({ onResetKey }) => {
       const responseText = await getTeacherInsights(textToSearch, currentHistory);
       setMessages(prev => [...prev, { role: 'model', text: responseText }]);
     } catch (err: any) {
-      if (err.message === "REAUTH_REQUIRED") {
-        setConnectionError("Erro de Permissão: Selecione uma chave de API válida.");
-        if (onResetKey) {
-          setTimeout(() => onResetKey(), 2000); // Dá tempo do usuário ler o erro antes de resetar
-        }
-      } else {
-        setConnectionError(err.message || "Erro inesperado ao conectar.");
-        setMessages(prev => prev.slice(0, -1)); // Remove a última mensagem para permitir re-envio
-        setTopic(textToSearch);
-      }
+      setConnectionError(err.message || "Erro inesperado ao consultar o Mestre.");
+      setMessages(prev => prev.slice(0, -1));
+      setTopic(textToSearch);
     } finally {
       setLoading(false);
     }
@@ -268,7 +257,7 @@ const AITeacher: React.FC<AITeacherProps> = ({ onResetKey }) => {
             <div className="flex justify-start animate-pulse">
               <div className="bg-white/5 p-4 rounded-xl flex items-center gap-3 border border-amber-500/10 shadow-lg">
                 <Loader2 className="w-5 h-5 text-amber-600 animate-spin" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-amber-900">O Mestre está consultando os bordões...</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-500">O Mestre está consultando os bordões...</span>
               </div>
             </div>
           )}
