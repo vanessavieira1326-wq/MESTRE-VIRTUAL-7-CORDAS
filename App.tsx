@@ -12,15 +12,15 @@ const musicalNotationFragments = [
 ];
 
 const welcomeTexts = [
-  "Onde o grave conduz a harmonia e a tradição encontra o virtuosismo moderno. Mergulhe na linguagem única dos bordões brasileiros.",
-  "A sétima corda é o coração do regional. Explore as baixarias de Dino com o auxílio da inteligência artificial.",
-  "Do Choro ao Samba: domine a condução rítmica e a clareza técnica dos bordões com o Mestre Virtual."
+  "O grave conduz a harmonia. Explore as baixarias de Dino com o auxílio da inteligência artificial.",
+  "A sétima corda é o coração do regional. Domine a condução rítmica com o Mestre Virtual.",
+  "Do Choro ao Samba: domine a clareza técnica dos bordões brasileiros em 7 cordas."
 ];
 
 const ThoughtTicker: React.FC = () => {
   const [index, setIndex] = useState(0);
   useEffect(() => {
-    const interval = setInterval(() => setIndex((prev) => (prev + 1) % musicalNotationFragments.length), 1200);
+    const interval = setInterval(() => setIndex((prev) => (prev + 1) % musicalNotationFragments.length), 1500);
     return () => clearInterval(interval);
   }, []);
 
@@ -68,7 +68,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0c0604] text-slate-100 flex flex-col font-sans overflow-x-hidden selection:bg-amber-500/40">
+    <div className="min-h-screen bg-[#0c0604] text-slate-100 flex flex-col font-sans overflow-x-hidden selection:bg-amber-500/40 pb-safe">
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute inset-0 bg-gradient-to-b from-[#1a0f0a] via-[#0c0604] to-[#0c0604]" />
       </div>
@@ -77,9 +77,12 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <AppIcon />
-            <h1 className="text-xl md:text-3xl font-black tracking-tighter bg-gradient-to-r from-white to-amber-500 bg-clip-text text-transparent italic leading-none">
-              Mestre Virtual 7C
-            </h1>
+            <div>
+              <h1 className="text-xl md:text-3xl font-black tracking-tighter bg-gradient-to-r from-white to-amber-500 bg-clip-text text-transparent italic leading-none">
+                Mestre 7C
+              </h1>
+              <span className="text-[8px] font-black uppercase tracking-[0.3em] text-amber-500/50">Regional Pro</span>
+            </div>
           </div>
           
           <div className="flex items-center gap-3">
@@ -99,15 +102,17 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="relative z-10 flex-1 w-full max-w-4xl mx-auto px-4 py-4 md:py-8 flex flex-col gap-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-6">
+      <main className="relative z-10 flex-1 w-full max-w-6xl mx-auto px-4 py-4 md:py-8 flex flex-col gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-5 space-y-6">
             <Metronome />
-            <BaixariaRadar />
             <Tuner />
-            <SmartEar />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+               <BaixariaRadar />
+               <SmartEar />
+            </div>
           </div>
-          <div className="lg:h-full">
+          <div className="lg:col-span-7 h-full">
             <AITeacher />
           </div>
         </div>
@@ -118,13 +123,13 @@ const App: React.FC = () => {
           </p>
         </section>
 
-        <footer className="grid grid-cols-1 md:grid-cols-3 gap-4 py-6 border-t border-white/5">
+        <footer className="grid grid-cols-1 md:grid-cols-3 gap-4 py-6 border-t border-white/5 mt-auto">
           {[
-            { icon: ShieldCheck, title: "Bordão", desc: "Base rítmica sólida e clara." },
-            { icon: Star, title: "Harmonia", desc: "Virtuosismo e bom gosto." },
-            { icon: Zap, title: "IA 7C", desc: "Tradição em formato digital." }
+            { icon: ShieldCheck, title: "Bordão", desc: "Base rítmica impecável." },
+            { icon: Star, title: "Harmonia", desc: "Virtuosismo digital." },
+            { icon: Zap, title: "Online", desc: "IA Gemini 3 Ativa." }
           ].map((item, idx) => (
-            <div key={idx} className="flex items-center gap-3 p-3 bg-black/20 rounded-xl border border-white/5 hover:bg-white/5 transition-colors group">
+            <div key={idx} className="flex items-center gap-3 p-4 bg-black/20 rounded-2xl border border-white/5 hover:bg-white/5 transition-colors group">
               <item.icon className="w-5 h-5 text-amber-500 shrink-0 group-hover:scale-110 transition-transform" />
               <div>
                 <h4 className="font-bold text-slate-100 text-[10px] uppercase tracking-wider">{item.title}</h4>

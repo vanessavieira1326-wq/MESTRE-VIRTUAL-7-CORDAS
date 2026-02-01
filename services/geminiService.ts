@@ -7,87 +7,86 @@ export interface ChatMessage {
 }
 
 const SYSTEM_PROMPT = `Você é o "Mestre Virtual 7 Cordas". 
-Um dos maiores especialistas do mundo em Violão de 7 Cordas, com foco em Samba, Choro e Pagode. 
-Suas referências são Dino 7 Cordas e Raphael Rabello.
+O maior especialista em Violão de 7 Cordas (Samba, Choro e Pagode). 
+Referências: Dino 7 Cordas e Raphael Rabello.
 
-Diretrizes de resposta:
-1. Sempre forneça tablaturas ASCII precisas para violão de 7 cordas (adicionando a 7ª corda em Dó ou Si).
-2. Explique as baixarias focando na técnica do polegar.
-3. Use terminologia de regional: "bordão", "baixaria", "condução", "puxada", "fraseado".
-4. Se o usuário pedir escalas, mostre o desenho no braço do violão com tablaturas.
-5. Seja encorajador, como um mestre de roda de samba.`;
+REGRAS OBRIGATÓRIAS:
+1. Responda SEMPRE com tablaturas ASCII de 7 cordas quando solicitado escalas ou frases.
+2. A 7ª corda deve ser representada como 'C' ou '7' na tablatura.
+3. Foque na técnica da "baixaria" (frases nos bordões).
+4. Seja direto e encorajador.
+5. Se for uma escala, mostre o desenho completo.`;
 
 /**
- * Função central para gerar conteúdo, garantindo que a API KEY seja sempre a mais recente.
+ * Função para obter a instância da IA de forma segura e resiliente.
  */
-async function callGemini(model: string, contents: any, systemInstruction?: string) {
+const getAIInstance = () => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) throw new Error("Sinal interrompido: API Key não encontrada.");
-
-  const ai = new GoogleGenAI({ apiKey });
-  const response = await ai.models.generateContent({
-    model,
-    contents,
-    config: {
-      systemInstruction,
-      temperature: 0.7,
-      topP: 0.95,
-      topK: 64,
-    },
-  });
-
-  return response.text;
-}
+  if (!apiKey) {
+    throw new Error("API_KEY_MISSING");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export const getTeacherInsights = async (prompt: string, history: ChatMessage[] = []) => {
   try {
+    const ai = getAIInstance();
     const contents = [
       ...history.map(h => ({ role: h.role, parts: h.parts })),
       { role: 'user', parts: [{ text: prompt }] }
     ];
 
-    const text = await callGemini('gemini-3-pro-preview', contents, SYSTEM_PROMPT);
-    return text || "O Mestre está buscando a melhor resposta...";
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents,
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        temperature: 0.7,
+      },
+    });
+
+    return response.text || "O Mestre está buscando a melhor resposta na memória...";
   } catch (error: any) {
-    console.error("Erro na conexão com o Mestre:", error);
-    // Se falhar o Pro, tentamos o Flash como fallback imediato para não deixar o usuário no vácuo
-    try {
-      const contents = [{ role: 'user', parts: [{ text: prompt }] }];
-      return await callGemini('gemini-3-flash-preview', contents, SYSTEM_PROMPT);
-    } catch (fallbackError) {
-      return "Salve! O sinal de rádio da roda de samba está oscilando. Tente repetir sua pergunta sobre as 7 cordas.";
+    console.error("Erro no Mestre Virtual:", error);
+    if (error.message === "API_KEY_MISSING") {
+      return "Salve! O sistema está sem a chave de sinal (API KEY). Para funcionar fora do Studio, configure a variável de ambiente.";
     }
+    return "O sinal da roda de samba oscilou. Tente perguntar novamente!";
   }
 };
 
 export const identifyLivePhrase = async (audioBase64: string, mimeType: string) => {
   try {
-    const contents = {
-      parts: [
-        { inlineData: { mimeType, data: audioBase64 } },
-        { text: "Você é um mestre de violão 7 cordas. Identifique o que foi tocado (escala, baixaria ou acorde) e dê uma dica técnica curta." }
-      ]
-    };
-    
-    return await callGemini('gemini-3-flash-preview', contents);
+    const ai = getAIInstance();
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: {
+        parts: [
+          { inlineData: { mimeType, data: audioBase64 } },
+          { text: "Identifique esta baixaria ou frase de violão 7 cordas. Dê o nome da escala ou acorde e uma dica técnica." }
+        ]
+      },
+    });
+    return response.text;
   } catch (error) {
-    console.error("Erro no Radar:", error);
-    return "O radar captou a vibração, mas o sinal falhou. Toque a baixaria novamente!";
+    return "O radar captou a frequência, mas não conseguiu processar. Toque mais perto do microfone!";
   }
 };
 
 export const analyzeBaixaria = async (audioBase64: string, mimeType: string) => {
   try {
-    const contents = {
-      parts: [
-        { inlineData: { mimeType, data: audioBase64 } },
-        { text: "Transcreva este trecho de 7 cordas para tablatura ASCII. Seja preciso com a 7ª corda." }
-      ]
-    };
-
-    return await callGemini('gemini-3-flash-preview', contents);
+    const ai = getAIInstance();
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: {
+        parts: [
+          { inlineData: { mimeType, data: audioBase64 } },
+          { text: "Transcreva este áudio de 7 cordas para tablatura ASCII detalhada." }
+        ]
+      },
+    });
+    return response.text;
   } catch (error) {
-    console.error("Erro no SmartEar:", error);
-    return "O ouvido do mestre falhou na conexão. Tente gravar um trecho mais curto.";
+    return "O ouvido do mestre falhou na transcrição. Tente um trecho mais limpo.";
   }
 };
