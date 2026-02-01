@@ -6,102 +6,88 @@ export interface ChatMessage {
   parts: { text: string }[];
 }
 
-// BASE DE CONHECIMENTO LOCAL (PARA FUNCIONAMENTO SEM API)
-const LOCAL_KNOWLEDGE: Record<string, string> = {
-  "escala de do maior": `Aqui está a escala de Dó Maior no Violão de 7 Cordas (Afinação em C):\n\nE|--------------------------0--1--3--|\nB|-----------------0--1--3-----------|\nG|-----------0--2--------------------|\nD|-----0--2--3-----------------------|\nA|--3--------------------------------|\nE|-----------------------------------|\nC|-----------------------------------|\n\nFoque na clareza do bordão (Dó na 5ª corda).`,
-  "escala de sol maior": `Escala de Sol Maior (7 Cordas):\n\nE|-----------------------------------|\nB|-----------------------------0--1--|\nG|-----------------------0--2--------|\nD|--------------0--2--4--------------|\nA|-----0--2--3-----------------------|\nE|--3--------------------------------|\nC|-----------------------------------|\n\nUse o polegar para a nota Sol na 6ª corda.`,
-  "baixaria": `A "Baixaria" é a alma do 7 cordas. Ela une a harmonia ao ritmo. \n\nExemplo de frase clássica (Sol -> Ré):\nC|--0--2--4--5--|\nE|--3-----------|\n\nTente tocar com o polegar bem apoiado no bordão.`,
-  "dino 7 cordas": `Dino 7 Cordas (Horondino Silva) é o pai da linguagem moderna do instrumento. Seu estilo é marcado por frases curtas, precisas e um balanço inigualável.`,
-};
-
-const getLocalResponse = (prompt: string): string | null => {
-  const normalized = prompt.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  
-  for (const key in LOCAL_KNOWLEDGE) {
-    if (normalized.includes(key)) return LOCAL_KNOWLEDGE[key];
-  }
-  
-  if (normalized.includes("escala")) return "Qual escala você deseja aprender? Posso te mostrar Dó, Sol ou frases de Baixaria.";
-  if (normalized.includes("ola") || normalized.includes("oi")) return "Salve, violonista! Sou o Mestre Virtual. Como posso te ajudar com as 7 cordas hoje?";
-  
-  return null;
-};
-
 const SYSTEM_PROMPT = `Você é o "Mestre Virtual 7 Cordas". 
-Especialista em Samba, Choro e Pagode. Referências: Dino 7 Cordas e Raphael Rabello.
-Sempre forneça tablaturas ASCII para 7 cordas.`;
+Um dos maiores especialistas do mundo em Violão de 7 Cordas, com foco em Samba, Choro e Pagode. 
+Suas referências são Dino 7 Cordas e Raphael Rabello.
 
-export const getTeacherInsights = async (prompt: string, history: ChatMessage[] = []) => {
-  // 1. Tenta resposta local primeiro (burlar necessidade de API para coisas básicas)
-  const localRes = getLocalResponse(prompt);
-  if (localRes) return localRes;
+Diretrizes de resposta:
+1. Sempre forneça tablaturas ASCII precisas para violão de 7 cordas (adicionando a 7ª corda em Dó ou Si).
+2. Explique as baixarias focando na técnica do polegar.
+3. Use terminologia de regional: "bordão", "baixaria", "condução", "puxada", "fraseado".
+4. Se o usuário pedir escalas, mostre o desenho no braço do violão com tablaturas.
+5. Seja encorajador, como um mestre de roda de samba.`;
 
-  // 2. Se não houver resposta local, tenta usar a API do Gemini
+/**
+ * Função central para gerar conteúdo, garantindo que a API KEY seja sempre a mais recente.
+ */
+async function callGemini(model: string, contents: any, systemInstruction?: string) {
   const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey === "") {
-    return "O Mestre está em modo offline (sem API Key). Posso te ensinar escalas e conceitos básicos. Tente perguntar sobre 'escala de do' ou 'baixaria'.";
-  }
+  if (!apiKey) throw new Error("Sinal interrompido: API Key não encontrada.");
 
   const ai = new GoogleGenAI({ apiKey });
-  
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: [
-        ...history,
-        { role: 'user', parts: [{ text: prompt }] }
-      ],
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        temperature: 0.7,
-      },
-    });
+  const response = await ai.models.generateContent({
+    model,
+    contents,
+    config: {
+      systemInstruction,
+      temperature: 0.7,
+      topP: 0.95,
+      topK: 64,
+    },
+  });
 
-    return response.text || "O Mestre perdeu o fôlego. Tente perguntar de outra forma.";
+  return response.text;
+}
+
+export const getTeacherInsights = async (prompt: string, history: ChatMessage[] = []) => {
+  try {
+    const contents = [
+      ...history.map(h => ({ role: h.role, parts: h.parts })),
+      { role: 'user', parts: [{ text: prompt }] }
+    ];
+
+    const text = await callGemini('gemini-3-pro-preview', contents, SYSTEM_PROMPT);
+    return text || "O Mestre está buscando a melhor resposta...";
   } catch (error: any) {
-    console.warn("API Error, falling back to basic mestre logic");
-    return "Estou com dificuldade de conexão com o servidor central, mas como Mestre posso te dizer: foque no seu polegar e no ritmo do bordão! O Samba não pode parar.";
+    console.error("Erro na conexão com o Mestre:", error);
+    // Se falhar o Pro, tentamos o Flash como fallback imediato para não deixar o usuário no vácuo
+    try {
+      const contents = [{ role: 'user', parts: [{ text: prompt }] }];
+      return await callGemini('gemini-3-flash-preview', contents, SYSTEM_PROMPT);
+    } catch (fallbackError) {
+      return "Salve! O sinal de rádio da roda de samba está oscilando. Tente repetir sua pergunta sobre as 7 cordas.";
+    }
   }
 };
 
 export const identifyLivePhrase = async (audioBase64: string, mimeType: string) => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) return "Modo Radar Offline: Identifiquei um bordão característico de Samba em Sol Maior.";
-
-  const ai = new GoogleGenAI({ apiKey });
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: {
-        parts: [
-          { inlineData: { mimeType, data: audioBase64 } },
-          { text: "Identifique esta frase de violão 7 cordas." }
-        ]
-      },
-    });
-    return response.text;
+    const contents = {
+      parts: [
+        { inlineData: { mimeType, data: audioBase64 } },
+        { text: "Você é um mestre de violão 7 cordas. Identifique o que foi tocado (escala, baixaria ou acorde) e dê uma dica técnica curta." }
+      ]
+    };
+    
+    return await callGemini('gemini-3-flash-preview', contents);
   } catch (error) {
-    return "O radar captou uma frase cromática típica de Choro.";
+    console.error("Erro no Radar:", error);
+    return "O radar captou a vibração, mas o sinal falhou. Toque a baixaria novamente!";
   }
 };
 
 export const analyzeBaixaria = async (audioBase64: string, mimeType: string) => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) return "Análise Offline: Frase executada nos bordões (6ª e 7ª cordas). Técnica de polegar e indicador detectada.";
-
-  const ai = new GoogleGenAI({ apiKey });
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: {
-        parts: [
-          { inlineData: { mimeType, data: audioBase64 } },
-          { text: "Transcreva para tablatura ASCII." }
-        ]
-      },
-    });
-    return response.text;
+    const contents = {
+      parts: [
+        { inlineData: { mimeType, data: audioBase64 } },
+        { text: "Transcreva este trecho de 7 cordas para tablatura ASCII. Seja preciso com a 7ª corda." }
+      ]
+    };
+
+    return await callGemini('gemini-3-flash-preview', contents);
   } catch (error) {
-    return "Não foi possível gerar a tablatura detalhada sem conexão, mas a frase soa como uma preparação para Ré7.";
+    console.error("Erro no SmartEar:", error);
+    return "O ouvido do mestre falhou na conexão. Tente gravar um trecho mais curto.";
   }
 };
