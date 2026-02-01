@@ -1,6 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import AITeacher from './components/AITeacher';
+import Metronome from './components/Metronome';
+import Tuner from './components/Tuner';
+import SmartEar from './components/SmartEar';
 import { ShieldCheck, Music2, Star, Zap, Music, Download } from 'lucide-react';
 
 const musicalNotationFragments = [
@@ -96,7 +99,16 @@ const App: React.FC = () => {
       </header>
 
       <main className="relative z-10 flex-1 w-full max-w-4xl mx-auto px-4 py-4 md:py-8 flex flex-col gap-6">
-        <AITeacher />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-6">
+            <Metronome />
+            <Tuner />
+            <SmartEar />
+          </div>
+          <div className="lg:h-full">
+            <AITeacher />
+          </div>
+        </div>
 
         <section className="bg-white/5 p-5 rounded-[1.5rem] border border-white/5 shadow-inner">
           <p className="text-slate-400 text-sm md:text-lg leading-relaxed italic border-l-2 border-amber-600 pl-4">
