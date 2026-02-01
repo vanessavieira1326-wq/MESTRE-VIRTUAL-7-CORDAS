@@ -19,9 +19,6 @@ const AITeacher: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
-  const isListeningManualRef = useRef(false);
-
-  const WHATSAPP_NUMBER = "5519987719618";
 
   useEffect(() => {
     synthRef.current = window.speechSynthesis;
@@ -32,23 +29,16 @@ const AITeacher: React.FC = () => {
 
   const speak = (text: string, index: number) => {
     if (!synthRef.current) return;
-
     if (speakingIndex === index) {
       synthRef.current.cancel();
       setSpeakingIndex(null);
       return;
     }
-
     synthRef.current.cancel();
-    const cleanedText = text.replace(/[*#|]/g, '').replace(/7 \(C\/B\).*/s, '[Tablatura omitida na leitura]');
+    const cleanedText = text.replace(/[*#|]/g, '').split('7 (C/B)')[0];
     const utterance = new SpeechSynthesisUtterance(cleanedText);
     utterance.lang = 'pt-BR';
-    utterance.rate = 1.0;
-    utterance.pitch = 0.9;
-    
     utterance.onend = () => setSpeakingIndex(null);
-    utterance.onerror = () => setSpeakingIndex(null);
-    
     setSpeakingIndex(index);
     synthRef.current.speak(utterance);
   };
@@ -57,183 +47,97 @@ const AITeacher: React.FC = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
+      recognition.continuous = false;
       recognition.lang = 'pt-BR';
-
       recognition.onresult = (event: any) => {
-        let currentTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            currentTranscript += event.results[i][0].transcript;
-          }
-        }
-        if (currentTranscript) {
-          setTopic(prev => (prev ? prev + ' ' + currentTranscript.trim() : currentTranscript.trim()));
-        }
+        const transcript = event.results[0][0].transcript;
+        setTopic(prev => (prev ? prev + ' ' + transcript : transcript));
+        setIsListening(false);
       };
-
-      recognition.onend = () => {
-        if (isListeningManualRef.current) {
-          try {
-            recognition.start();
-          } catch (e) {
-            console.error("Erro ao reiniciar áudio:", e);
-            setIsListening(false);
-          }
-        } else {
-          setIsListening(false);
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error("Erro de áudio:", event.error);
-        if (event.error === 'network') {
-          setConnectionError("Erro de rede no microfone.");
-        }
-      };
-
+      recognition.onend = () => setIsListening(false);
       recognitionRef.current = recognition;
     }
   }, []);
 
-  const toggleListening = useCallback(() => {
-    if (!recognitionRef.current) {
-      alert("Microfone não suportado no seu navegador.");
-      return;
-    }
-
+  const toggleListening = () => {
     if (isListening) {
-      isListeningManualRef.current = false;
-      setIsListening(false);
-      recognitionRef.current.stop();
+      recognitionRef.current?.stop();
     } else {
       setConnectionError(null);
-      isListeningManualRef.current = true;
-      setIsListening(true);
       try {
-        recognitionRef.current.start();
+        recognitionRef.current?.start();
+        setIsListening(true);
       } catch (e) {
-        console.error("Falha ao iniciar microfone:", e);
-        setIsListening(false);
-        isListeningManualRef.current = false;
+        alert("Erro ao acessar microfone.");
       }
     }
-  }, [isListening]);
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  const handleAsk = async (customPrompt?: string) => {
-    const textToSearch = customPrompt || topic;
-    if (!textToSearch.trim() || loading) return;
+  const handleAsk = async () => {
+    if (!topic.trim() || loading) return;
 
+    const currentPrompt = topic.trim();
     setConnectionError(null);
-    if (isListening) {
-      isListeningManualRef.current = false;
-      setIsListening(false);
-      recognitionRef.current?.stop();
-    }
-    if (synthRef.current) synthRef.current.cancel();
+    setTopic(''); // Limpa o input imediatamente para melhor UX
+    
+    // Constrói histórico ANTES de adicionar a nova mensagem ao estado
+    const currentHistory: ChatMessage[] = messages.map(m => ({
+      role: m.role,
+      parts: [{ text: m.text }]
+    }));
 
-    const newUserMessage = { role: 'user' as const, text: textToSearch };
-    setMessages(prev => [...prev, newUserMessage]);
-    setTopic('');
+    setMessages(prev => [...prev, { role: 'user', text: currentPrompt }]);
     setLoading(true);
 
     try {
-      const currentHistory: ChatMessage[] = messages.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.text }]
-      }));
-      const responseText = await getTeacherInsights(textToSearch, currentHistory);
+      const responseText = await getTeacherInsights(currentPrompt, currentHistory);
       setMessages(prev => [...prev, { role: 'model', text: responseText }]);
     } catch (err: any) {
-      setConnectionError(err.message || "Erro inesperado ao consultar o Mestre.");
-      setMessages(prev => prev.slice(0, -1));
-      setTopic(textToSearch);
+      setConnectionError(err.message);
+      // Opcional: remover a última mensagem do usuário se falhar
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col gap-3 w-full">
-      {connectionError && (
-        <div className="bg-red-500/10 border border-red-500/50 p-3 rounded-xl flex items-center gap-3 text-red-200 text-[11px] animate-in fade-in slide-in-from-top-2 font-black uppercase tracking-widest">
-          <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
-          <div className="flex-1 leading-tight">{connectionError}</div>
-          <button onClick={() => setConnectionError(null)} className="bg-red-500/20 px-2 py-1 rounded hover:bg-red-500/40 transition-colors">OK</button>
-        </div>
-      )}
-
-      <div className="w-full space-y-3">
-        <div className="flex flex-col gap-2 p-2 bg-black/60 border border-white/10 rounded-2xl shadow-xl">
-          <div className="flex items-center gap-2">
-            <input 
-              type="text"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
-              placeholder="Pergunte ao Mestre..."
-              className="flex-1 bg-transparent border-none py-2 text-white placeholder:text-slate-600 focus:ring-0 outline-none font-bold text-base px-2"
-            />
-            <button 
-              onClick={toggleListening}
-              className={`p-2.5 rounded-xl transition-all relative ${
-                isListening ? 'bg-red-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.6)] scale-105' : 'bg-white/5 text-amber-500 hover:bg-white/10'
-              }`}
-            >
-              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              {isListening && <span className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full animate-ping"></span>}
-            </button>
+    <div className="flex flex-col gap-3 w-full h-full">
+      <div className="bg-black/80 border border-white/10 rounded-[2rem] flex flex-col h-[500px] md:h-[600px] overflow-hidden shadow-2xl backdrop-blur-xl">
+        {/* Header da Sala de Aula */}
+        <div className="p-4 border-b border-white/5 flex items-center justify-between bg-amber-900/10">
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500">Mestre Online</span>
           </div>
-          <button 
-            onClick={() => handleAsk()}
-            disabled={loading || !topic.trim()}
-            className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-20 text-white py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px] shadow-lg active:scale-95"
-          >
-            {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            Consultar o Mestre
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-black/80 border border-white/10 rounded-[1.5rem] flex flex-col h-[380px] md:h-[500px] overflow-hidden shadow-2xl">
-        <div className="p-3 border-b border-white/5 flex items-center justify-between bg-white/5">
-          <div className="flex items-center gap-2">
-            <Sparkles className="text-amber-500 w-4 h-4" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-white/80">Aula Particular de 7 Cordas</span>
-          </div>
-          <button onClick={() => setMessages([])} className="p-1.5 text-slate-600 hover:text-red-500 transition-colors">
+          <button onClick={() => setMessages([])} className="p-2 text-slate-600 hover:text-red-500 transition-colors">
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-gradient-to-b from-transparent to-black/20">
-          {messages.length === 0 && !loading && (
-            <div className="h-full flex flex-col items-center justify-center opacity-10 text-center select-none">
-              <Music className="w-16 h-16 mb-4" />
-              <p className="text-xs font-black uppercase tracking-[0.4em]">Silêncio na Sala</p>
+        {/* Área de Mensagens */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+          {messages.length === 0 && (
+            <div className="h-full flex flex-col items-center justify-center text-center opacity-20">
+              <Music className="w-12 h-12 mb-4 text-amber-500" />
+              <p className="text-[10px] font-black uppercase tracking-widest">A aula ainda não começou</p>
             </div>
           )}
 
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
-              <div className={`max-w-[95%] p-4 rounded-xl shadow-md border ${
+              <div className={`max-w-[85%] p-4 rounded-2xl shadow-xl ${
                 msg.role === 'user' 
-                ? 'bg-amber-900/30 text-white border-amber-600/20 rounded-tr-none' 
-                : 'bg-white/5 text-slate-300 text-sm md:text-base leading-relaxed whitespace-pre-wrap rounded-tl-none border-white/5'
+                ? 'bg-amber-600/20 text-white border border-amber-600/30 rounded-tr-none' 
+                : 'bg-white/5 text-slate-200 border border-white/10 rounded-tl-none'
               }`}>
-                {msg.text}
+                <p className="text-sm leading-relaxed whitespace-pre-wrap font-medium">{msg.text}</p>
                 {msg.role === 'model' && (
                   <div className="mt-3 flex gap-2 justify-end border-t border-white/5 pt-2">
-                    <button 
-                      onClick={() => speak(msg.text, idx)} 
-                      className="p-2 bg-white/5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-white/10 transition-all"
-                      title="Ouvir Resposta"
-                    >
+                    <button onClick={() => speak(msg.text, idx)} className="p-1.5 hover:text-amber-500 transition-colors">
                       {speakingIndex === idx ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
                     <button 
@@ -242,8 +146,7 @@ const AITeacher: React.FC = () => {
                         setCopiedIndex(idx);
                         setTimeout(() => setCopiedIndex(null), 2000);
                       }} 
-                      className="p-2 bg-white/5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-white/10 transition-all"
-                      title="Copiar Texto"
+                      className="p-1.5 hover:text-amber-500 transition-colors"
                     >
                       {copiedIndex === idx ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </button>
@@ -255,30 +158,63 @@ const AITeacher: React.FC = () => {
           
           {loading && (
             <div className="flex justify-start animate-pulse">
-              <div className="bg-white/5 p-4 rounded-xl flex items-center gap-3 border border-amber-500/10 shadow-lg">
-                <Loader2 className="w-5 h-5 text-amber-600 animate-spin" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-amber-500">O Mestre está consultando os bordões...</span>
+              <div className="bg-white/5 p-4 rounded-2xl border border-amber-500/20 flex items-center gap-3">
+                <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-500">O Mestre está escrevendo...</span>
               </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
-      </div>
 
-      <button 
-        onClick={() => window.open(`https://wa.me/${WHATSAPP_NUMBER}`, '_blank')} 
-        className="flex items-center justify-between p-4 bg-green-950/10 border border-green-900/20 rounded-2xl hover:bg-green-900/20 transition-all group active:scale-95"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-            <Headset className="w-4 h-4 text-green-500" />
-          </div>
-          <div className="text-left">
-            <h4 className="text-[10px] font-black text-white uppercase tracking-[0.1em]">Suporte Técnico Humano</h4>
-            <p className="text-[9px] text-slate-500">Dúvidas sobre o app ou violão?</p>
+        {/* Input da Aula */}
+        <div className="p-4 bg-white/5 border-t border-white/5 space-y-3">
+          {connectionError && (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2 text-[10px] text-red-400 font-bold uppercase">
+              <AlertCircle className="w-4 h-4" /> {connectionError}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-black/40 border border-white/10 rounded-xl flex items-center px-3">
+              <input 
+                type="text"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
+                placeholder="Pergunte sobre baixarias..."
+                className="flex-1 bg-transparent border-none py-3 text-sm text-white focus:ring-0 outline-none"
+              />
+              <button 
+                onClick={toggleListening}
+                className={`p-2 rounded-lg transition-all ${isListening ? 'text-red-500 scale-110' : 'text-slate-500'}`}
+              >
+                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+            </div>
+            <button 
+              onClick={handleAsk}
+              disabled={loading || !topic.trim()}
+              className="bg-amber-600 hover:bg-amber-500 disabled:opacity-20 p-3.5 rounded-xl text-white shadow-lg transition-all active:scale-95"
+            >
+              <Send className="w-5 h-5" />
+            </button>
           </div>
         </div>
-        <MessageCircle className="w-5 h-5 text-green-500 group-hover:scale-110 transition-transform" />
+      </div>
+      
+      {/* Botão WhatsApp para Suporte Real */}
+      <button 
+        onClick={() => window.open(`https://wa.me/5519987719618`, '_blank')} 
+        className="w-full flex items-center justify-between p-4 bg-green-950/20 border border-green-500/20 rounded-2xl hover:bg-green-500/20 transition-all group"
+      >
+        <div className="flex items-center gap-3">
+          <Headset className="w-5 h-5 text-green-500" />
+          <div className="text-left">
+            <h4 className="text-[10px] font-black text-white uppercase tracking-widest">Dúvida Técnica?</h4>
+            <p className="text-[9px] text-slate-500">Chame um professor no WhatsApp</p>
+          </div>
+        </div>
+        <MessageCircle className="w-5 h-5 text-green-500 group-hover:translate-x-1 transition-transform" />
       </button>
     </div>
   );
