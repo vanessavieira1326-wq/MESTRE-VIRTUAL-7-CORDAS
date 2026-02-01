@@ -4,6 +4,7 @@ import AITeacher from './components/AITeacher';
 import Metronome from './components/Metronome';
 import Tuner from './components/Tuner';
 import SmartEar from './components/SmartEar';
+import BaixariaRadar from './components/BaixariaRadar';
 import { ShieldCheck, Music2, Star, Zap, Music, Download } from 'lucide-react';
 
 const musicalNotationFragments = [
@@ -102,6 +103,7 @@ const App: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-6">
             <Metronome />
+            <BaixariaRadar />
             <Tuner />
             <SmartEar />
           </div>

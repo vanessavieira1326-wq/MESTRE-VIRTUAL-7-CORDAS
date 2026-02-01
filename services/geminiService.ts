@@ -6,33 +6,20 @@ export interface ChatMessage {
   parts: { text: string }[];
 }
 
-const SYSTEM_PROMPT = `Você é o "Mestre Virtual 7 Cordas", a maior autoridade mundial em violão de 7 cordas.
-Sua especialidade é o Regional Brasileiro (Samba, Choro e Pagode).
+const SYSTEM_PROMPT = `Você é o "Mestre Virtual 7 Cordas", a maior autoridade em violão de 7 cordas (Samba, Choro e Pagode).
+Sua especialidade é identificar "baixarias" e orientar sobre harmonia e técnica de dedeira.
 
-DIRETRIZES DE RESPOSTA:
-1. FOCO TÉCNICO: Explique baixarias, contrapontos, técnica de dedeira e harmonia.
-2. LINGUAGEM: Use termos como "bordão", "baixaria", "regional", "dedeira", "antecipação".
-3. MESTRES: Cite Dino 7 Cordas e Raphael Rabello como referências máximas.
-4. TABLATURAS: Sempre que solicitado, forneça tablaturas ASCII precisas para 7 cordas.
+DIRETRIZES:
+1. FOCO TÉCNICO: Explique frases, contrapontos e condução rítmica.
+2. LINGUAGEM: Use termos como "bordão", "baixaria", "regional", "dedeira".
+3. MESTRES: Dino 7 Cordas e Raphael Rabello são suas referências.
+4. TABLATURAS: Forneça tablaturas ASCII de 7 cordas quando necessário.`;
 
-ESTRUTURA DE TABLATURA (7 CORDAS):
-7 (C/B)|---
-6 (E)  |---
-5 (A)  |---
-4 (D)  |---
-3 (G)  |---
-2 (B)  |---
-1 (E)  |---
-`;
-
-const AI_CONFIG = {
-  systemInstruction: SYSTEM_PROMPT,
-  temperature: 0.7,
-  topP: 0.95,
-};
+// Inicialização segura dentro das funções para garantir a captura da API KEY no ambiente do navegador
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getTeacherInsights = async (prompt: string, history: ChatMessage[] = []) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAI();
   
   try {
     const optimizedHistory = history.slice(-6);
@@ -42,12 +29,14 @@ export const getTeacherInsights = async (prompt: string, history: ChatMessage[] 
         ...optimizedHistory,
         { role: 'user', parts: [{ text: prompt }] }
       ],
-      config: AI_CONFIG,
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        temperature: 0.7,
+        topP: 0.95,
+      },
     });
 
-    const text = response.text;
-    if (!text) throw new Error("O mestre não gerou uma resposta válida.");
-    return text;
+    return response.text || "O mestre está em silêncio... tente perguntar novamente.";
   } catch (error: any) {
     console.error("Erro Gemini:", error);
     throw new Error(error.message || "Erro ao consultar o mestre.");
@@ -55,17 +44,17 @@ export const getTeacherInsights = async (prompt: string, history: ChatMessage[] 
 };
 
 /**
- * Função especializada para o "Ouvido Inteligente 7C"
- * Analisa áudio gravado para extrair baixarias e frases.
+ * Identifica frases e baixarias em tempo real.
  */
-export const analyzeBaixaria = async (audioBase64: string, mimeType: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export const identifyLivePhrase = async (audioBase64: string, mimeType: string) => {
+  const ai = getAI();
   
-  const prompt = `Analise este áudio de violão de 7 cordas. 
-1. Identifique as baixarias (frases de baixo) executadas.
-2. Transcreva a frase principal em tablatura ASCII de 7 cordas.
-3. Explique a lógica harmônica (ex: antecipação de dominante, escala usada).
-4. Dê dicas de dedeira para esta frase específica.`;
+  const prompt = `Analise este áudio de violão de 7 cordas.
+1. Identifique o TIPO de baixaria ou frase executada (ex: Cromatismo para o V grau, frase clássica do Dino, etc).
+2. Forneça o nome da frase e a tonalidade provável.
+3. Dê uma dica rápida de execução (ex: "Cuidado com o brilho da 7ª corda").
+4. Se for uma frase famosa, cite o autor.
+Responda de forma curta e direta, como um mestre em um ensaio de regional.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -76,14 +65,38 @@ export const analyzeBaixaria = async (audioBase64: string, mimeType: string) => 
           { text: prompt }
         ]
       },
-      config: AI_CONFIG,
+      config: {
+        temperature: 0.2,
+      },
     });
 
-    const text = response.text;
-    if (!text) throw new Error("O Ouvido Inteligente não conseguiu processar este trecho.");
-    return text;
+    return response.text || "Não foi possível identificar a frase.";
   } catch (error: any) {
-    console.error("Erro Ouvido Inteligente:", error);
-    throw new Error("Não foi possível analisar o áudio. Certifique-se de que o som está claro.");
+    console.error("Erro no Radar:", error);
+    throw new Error("O mestre não conseguiu ouvir claramente.");
+  }
+};
+
+export const analyzeBaixaria = async (audioBase64: string, mimeType: string) => {
+  const ai = getAI();
+  
+  const prompt = `Transcrição detalhada de violão de 7 cordas:
+1. Transcreva a frase principal em tablatura ASCII de 7 cordas.
+2. Explique a lógica harmônica e técnica de dedeira.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: {
+        parts: [
+          { inlineData: { mimeType: mimeType, data: audioBase64 } },
+          { text: prompt }
+        ]
+      },
+    });
+
+    return response.text || "Erro na transcrição.";
+  } catch (error: any) {
+    throw new Error("Falha na análise profunda.");
   }
 };
