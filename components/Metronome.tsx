@@ -34,10 +34,8 @@ const Metronome: React.FC = () => {
     const envelope = audioContext.current.createGain();
 
     // Som de madeira/click seco
-    // Frequência mais alta para o primeiro tempo (acentuação)
     osc.frequency.value = beatNumber === 0 ? 1000 : 800;
     
-    // Aplica o volume definido pelo usuário
     const currentVol = volumeRef.current;
     envelope.gain.value = currentVol;
     envelope.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
@@ -55,7 +53,7 @@ const Metronome: React.FC = () => {
       nextNote();
     }
     timerID.current = window.setTimeout(scheduler, lookahead);
-  }, [bpm, beatsPerMeasure, currentBeat]); // Dependências corrigidas para refletir o estado atual
+  }, [bpm, beatsPerMeasure, currentBeat]);
 
   const toggleMetronome = () => {
     if (!isPlaying) {
@@ -66,7 +64,6 @@ const Metronome: React.FC = () => {
         audioContext.current.resume();
       }
       setIsPlaying(true);
-      // Resetar batida ao iniciar
       setCurrentBeat(0);
       nextNoteTime.current = audioContext.current.currentTime + 0.05;
       scheduler();
@@ -96,89 +93,92 @@ const Metronome: React.FC = () => {
     <div className="bg-[#1a0f0a] border border-[#3d2516] rounded-3xl p-4 shadow-2xl relative overflow-hidden group">
       <div className="absolute inset-0 opacity-5 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] pointer-events-none"></div>
       
-      <div className="relative z-10 flex flex-col md:flex-row items-center gap-6">
-        {/* Lado Esquerdo: Display e Controle de BPM */}
-        <div className="flex items-center gap-4">
-          <div className="text-center">
-            <span className="block text-[10px] font-black text-amber-500/50 uppercase tracking-[0.2em] mb-1">BPM</span>
-            <div className="text-4xl font-mono font-black text-white bg-black/40 px-4 py-2 rounded-xl border border-white/5 min-w-[100px]">
+      <div className="relative z-10 flex flex-col gap-4">
+        {/* Cabeçalho do Metrônomo */}
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <Music className="w-3 h-3 text-amber-500" />
+            <span className="text-[10px] font-black text-amber-500/50 uppercase tracking-[0.2em]">Tempo & Cadência</span>
+          </div>
+          <select 
+            value={beatsPerMeasure}
+            onChange={(e) => setBeatsPerMeasure(Number(e.target.value))}
+            className="bg-transparent border-none text-[10px] font-black text-slate-500 uppercase tracking-widest focus:ring-0 outline-none cursor-pointer hover:text-amber-500 transition-colors"
+          >
+            <option value={2}>2/4 Samba</option>
+            <option value={3}>3/4 Valsa</option>
+            <option value={4}>4/4 Choro</option>
+          </select>
+        </div>
+
+        {/* Display Principal */}
+        <div className="flex items-center justify-between bg-black/40 p-4 rounded-2xl border border-white/5">
+          <div className="flex flex-col items-center">
+            <span className="text-[9px] font-black text-slate-500 uppercase mb-1">BPM</span>
+            <div className="text-5xl font-mono font-black text-white tracking-tighter">
               {bpm}
             </div>
           </div>
 
           <div className="flex flex-col gap-2">
-            <button onClick={() => adjustBpm(5)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-amber-500 transition-colors">
-              <Plus className="w-4 h-4" />
+            <button onClick={() => adjustBpm(5)} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-amber-500 transition-all active:scale-90">
+              <Plus className="w-5 h-5" />
             </button>
-            <button onClick={() => adjustBpm(-5)} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-amber-500 transition-colors">
-              <Minus className="w-4 h-4" />
+            <button onClick={() => adjustBpm(-5)} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-amber-500 transition-all active:scale-90">
+              <Minus className="w-5 h-5" />
             </button>
           </div>
         </div>
 
         {/* Visualizador de Batida e Volume */}
-        <div className="flex-1 flex flex-col gap-4 w-full">
-          <div className="flex justify-between items-center px-2">
-             <div className="flex gap-2">
-               {[...Array(beatsPerMeasure)].map((_, i) => (
-                 <div 
-                   key={i}
-                   className={`h-2 w-8 rounded-full transition-all duration-100 ${
-                     isPlaying && currentBeat === i 
-                     ? (i === 0 ? 'bg-amber-500 shadow-[0_0_15px_#f59e0b]' : 'bg-amber-200 shadow-[0_0_10px_#fde68a]')
-                     : 'bg-white/5'
-                   }`}
-                 />
-               ))}
-             </div>
-             
-             <div className="flex items-center gap-3">
-               <div className="flex items-center gap-2 bg-black/20 px-3 py-1 rounded-full border border-white/5">
-                 <VolumeIcon />
-                 <input 
-                   type="range"
-                   min="0"
-                   max="1"
-                   step="0.01"
-                   value={volume}
-                   onChange={(e) => setVolume(parseFloat(e.target.value))}
-                   className="w-16 md:w-20 accent-amber-600 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
-                   title={`Volume: ${Math.round(volume * 100)}%`}
-                 />
-               </div>
-
-               <select 
-                 value={beatsPerMeasure}
-                 onChange={(e) => setBeatsPerMeasure(Number(e.target.value))}
-                 className="bg-transparent border-none text-[10px] font-black text-slate-500 uppercase tracking-widest focus:ring-0 outline-none cursor-pointer hover:text-amber-500 transition-colors"
-               >
-                 <option value={2}>2/4 Samba</option>
-                 <option value={3}>3/4 Valsa</option>
-                 <option value={4}>4/4 Choro</option>
-               </select>
-             </div>
+        <div className="space-y-4">
+          <div className="flex justify-center gap-3">
+            {[...Array(beatsPerMeasure)].map((_, i) => (
+              <div 
+                key={i}
+                className={`h-2 flex-1 max-w-[60px] rounded-full transition-all duration-100 ${
+                  isPlaying && currentBeat === i 
+                  ? (i === 0 ? 'bg-amber-500 shadow-[0_0_15px_#f59e0b]' : 'bg-amber-200 shadow-[0_0_10px_#fde68a]')
+                  : 'bg-white/5'
+                }`}
+              />
+            ))}
           </div>
-
-          <input 
-            type="range"
-            min="40"
-            max="240"
-            value={bpm}
-            onChange={(e) => setBpm(Number(e.target.value))}
-            className="w-full accent-amber-600 h-1 bg-white/5 rounded-lg appearance-none cursor-pointer"
-          />
+          
+          <div className="flex items-center gap-4 bg-black/20 px-4 py-2 rounded-xl border border-white/5">
+            <VolumeIcon />
+            <input 
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={volume}
+              onChange={(e) => setVolume(parseFloat(e.target.value))}
+              className="flex-1 accent-amber-600 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
         </div>
 
-        {/* Botão Play */}
+        {/* Botão Play - Grande para Mobile */}
         <button 
           onClick={toggleMetronome}
-          className={`shrink-0 w-16 h-16 rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-95 ${
+          className={`w-full py-5 rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-95 border ${
             isPlaying 
-            ? 'bg-amber-600 text-white shadow-amber-900/40' 
-            : 'bg-white/5 text-amber-500 border border-amber-600/20'
+            ? 'bg-amber-600 border-amber-500 text-white shadow-amber-900/40' 
+            : 'bg-white/5 text-amber-500 border-amber-600/20'
           }`}
         >
-          {isPlaying ? <Pause className="w-8 h-8 fill-current" /> : <Play className="w-8 h-8 fill-current ml-1" />}
+          {isPlaying ? (
+            <div className="flex items-center gap-2">
+              <Pause className="w-6 h-6 fill-current" />
+              <span className="font-black uppercase tracking-widest text-xs">Pausar</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Play className="w-6 h-6 fill-current" />
+              <span className="font-black uppercase tracking-widest text-xs">Iniciar Tempo</span>
+            </div>
+          )}
         </button>
       </div>
     </div>

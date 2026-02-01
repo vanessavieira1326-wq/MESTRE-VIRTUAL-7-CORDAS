@@ -40,9 +40,9 @@ const BaixariaRadar: React.FC = () => {
 
       intervalRef.current = window.setInterval(() => {
         setTimer(prev => {
-          if (prev >= 7) { // 8 segundos é o tempo ideal para uma baixaria
+          if (prev >= 10) { // Limite aumentado para 10s para frases mais longas
             stopListening();
-            return 7;
+            return 10;
           }
           return prev + 1;
         });
@@ -100,11 +100,20 @@ const BaixariaRadar: React.FC = () => {
           )}
         </div>
 
-        <div className="relative min-h-[140px] bg-black/40 rounded-2xl border border-white/5 flex flex-col items-center justify-center p-4 transition-all">
+        <div className="relative min-h-[140px] bg-black/40 rounded-2xl border border-white/5 flex flex-col items-center justify-center p-4 transition-all overflow-hidden">
           {isListening && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-24 h-24 rounded-full border-2 border-amber-500/20 animate-ping"></div>
-              <Activity className="w-12 h-12 text-amber-500/40 animate-pulse" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+              <div className="relative flex items-center justify-center">
+                <div className="absolute w-24 h-24 rounded-full border-2 border-red-500/20 animate-ping"></div>
+                <Activity className="w-12 h-12 text-red-500/40 animate-pulse" />
+              </div>
+              
+              <button 
+                onClick={stopListening}
+                className="bg-red-600 hover:bg-red-500 text-white px-6 py-2.5 rounded-xl font-black uppercase tracking-widest text-[9px] shadow-lg flex items-center gap-2 transition-all active:scale-95 z-20"
+              >
+                <Square className="w-3 h-3 fill-current" /> Parar e Analisar
+              </button>
             </div>
           )}
 
