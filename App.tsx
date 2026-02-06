@@ -5,16 +5,16 @@ import Metronome from './components/Metronome';
 import Tuner from './components/Tuner';
 import SmartEar from './components/SmartEar';
 import BaixariaRadar from './components/BaixariaRadar';
-import { ShieldCheck, Music2, Star, Zap, Music, Download, Link as LinkIcon, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, Music2, Star, Zap, Music, Download, Link as LinkIcon, GraduationCap } from 'lucide-react';
 
 const musicalNotationFragments = [
   "♩=120", "♫ ♬ ♭", "♯C7M(9)", "♭9/♯11", "|--7--5--|", "𝄞 𝄢", "A/G#", "D7(b9)", "G/B", "E7/D", "|--0-h-2--|", "p.i.m.a", "7ª Corda (C)", "|--x--|", "B7(13)", "Cm7(b5)"
 ];
 
 const welcomeTexts = [
-  "O grave conduz a harmonia. Explore as baixarias de Dino com o auxílio da inteligência artificial.",
-  "A sétima corda é o coração do regional. Domine a condução rítmica com o Mestre Virtual.",
-  "Do Choro ao Samba: domine a clareza técnica dos bordões brasileiros em 7 cordas."
+  "A 7ª corda é o coração do regional. Estude bordões e condução rítmica aqui.",
+  "Domine a clareza técnica dos bordões brasileiros com nosso método de 7 cordas.",
+  "Explore o grave que conduz a harmonia. Seja bem-vindo à roda do Mestre."
 ];
 
 const ThoughtTicker: React.FC = () => {
@@ -54,7 +54,6 @@ const App: React.FC = () => {
   useEffect(() => {
     setDescription(welcomeTexts[Math.floor(Math.random() * welcomeTexts.length)]);
     
-    // Verifica se a chave de sinal está ativa (necessário para Web/Mobile fora do Studio)
     const checkKey = async () => {
       if (window.aistudio) {
         const isSelected = await window.aistudio.hasSelectedApiKey();
@@ -72,15 +71,7 @@ const App: React.FC = () => {
   const handleConnectKey = async () => {
     if (window.aistudio) {
       await window.aistudio.openSelectKey();
-      setHasKey(true); // Assume sucesso para liberar a UI
-    }
-  };
-
-  const handleInstall = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') setDeferredPrompt(null);
+      setHasKey(true);
     }
   };
 
@@ -106,19 +97,10 @@ const App: React.FC = () => {
             {!hasKey && (
               <button 
                 onClick={handleConnectKey}
-                className="flex items-center gap-2 bg-amber-600 hover:bg-amber-500 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-[0_0_15px_rgba(217,119,6,0.5)] animate-pulse transition-all border border-amber-400/20"
+                className="flex items-center gap-2 bg-amber-600/20 hover:bg-amber-600/40 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border border-amber-500/30"
               >
-                <Zap className="w-3 h-3 fill-white" />
-                Conectar ao Mestre
-              </button>
-            )}
-            {deferredPrompt && (
-              <button 
-                onClick={handleInstall}
-                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10 transition-all"
-              >
-                <Download className="w-3 h-3 text-amber-500" />
-                Instalar
+                <Zap className="w-3 h-3 text-amber-500" />
+                Ativar IA
               </button>
             )}
             <div className="hidden sm:block">
@@ -129,33 +111,17 @@ const App: React.FC = () => {
       </header>
 
       <main className="relative z-10 flex-1 w-full max-w-6xl mx-auto px-4 py-4 md:py-8 flex flex-col gap-6">
+        
+        {/* Banner Informativo sem bloquear o app */}
         {!hasKey && (
-          <div className="bg-amber-900/20 border border-amber-500/30 p-6 rounded-3xl backdrop-blur-xl flex flex-col md:flex-row items-center gap-6 animate-in fade-in slide-in-from-top-4">
-            <div className="p-4 bg-amber-600/20 rounded-2xl">
-              <AlertTriangle className="w-10 h-10 text-amber-500" />
-            </div>
-            <div className="flex-1 text-center md:text-left">
-              <h2 className="text-xl font-black uppercase tracking-widest text-white mb-2 italic">O Sinal está interrompido</h2>
-              <p className="text-sm text-slate-400 max-w-lg mb-4">
-                Para que o Mestre Virtual responda fora do estúdio, você precisa conectar uma chave de API válida de um projeto com faturamento ativo.
+          <div className="bg-amber-600/10 border border-amber-600/20 p-4 rounded-3xl backdrop-blur-md flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <GraduationCap className="w-5 h-5 text-amber-500" />
+              <p className="text-[10px] md:text-xs font-medium text-amber-200">
+                O Modo de IA está offline, mas os <strong>Métodos de Estudo</strong> e ferramentas de rádio continuam ativos.
               </p>
-              <div className="flex flex-wrap justify-center md:justify-start gap-4">
-                <button 
-                  onClick={handleConnectKey}
-                  className="bg-amber-600 hover:bg-amber-500 text-white px-6 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg transition-all active:scale-95"
-                >
-                  Estabelecer Sinal Agora
-                </button>
-                <a 
-                  href="https://ai.google.dev/gemini-api/docs/billing" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors"
-                >
-                  <LinkIcon className="w-3 h-3" /> Ver Documentação
-                </a>
-              </div>
             </div>
+            <button onClick={handleConnectKey} className="text-[9px] font-black uppercase bg-amber-600 px-3 py-1.5 rounded-lg">Ativar IA</button>
           </div>
         )}
 
@@ -164,6 +130,7 @@ const App: React.FC = () => {
             <Metronome />
             <Tuner />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+               {/* Ferramentas que funcionam sem IA ou mostram aviso interno */}
                <BaixariaRadar />
                <SmartEar />
             </div>
@@ -181,12 +148,12 @@ const App: React.FC = () => {
 
         <footer className="grid grid-cols-1 md:grid-cols-3 gap-4 py-6 border-t border-white/5 mt-auto">
           {[
-            { icon: ShieldCheck, title: "Bordão", desc: "Base rítmica impecável." },
-            { icon: Star, title: "Harmonia", desc: "Virtuosismo digital." },
-            { icon: Zap, title: "Sinal Ativo", desc: hasKey ? "Gemini 3 Conectado" : "Aguardando Sinal" }
+            { icon: ShieldCheck, title: "Bordão", desc: "Técnica de Dino 7 Cordas." },
+            { icon: Star, title: "Método", desc: "Biblioteca offline inclusa." },
+            { icon: Zap, title: "IA Neural", desc: hasKey ? "Conectada" : "Opcional" }
           ].map((item, idx) => (
-            <div key={idx} className="flex items-center gap-3 p-4 bg-black/20 rounded-2xl border border-white/5 hover:bg-white/5 transition-colors group">
-              <item.icon className={`w-5 h-5 shrink-0 group-hover:scale-110 transition-transform ${idx === 2 && !hasKey ? 'text-slate-600' : 'text-amber-500'}`} />
+            <div key={idx} className="flex items-center gap-3 p-4 bg-black/20 rounded-2xl border border-white/5 group">
+              <item.icon className="w-5 h-5 text-amber-500 shrink-0 group-hover:scale-110 transition-transform" />
               <div>
                 <h4 className="font-bold text-slate-100 text-[10px] uppercase tracking-wider">{item.title}</h4>
                 <p className="text-[9px] text-slate-500">{item.desc}</p>
