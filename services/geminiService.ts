@@ -6,44 +6,77 @@ export interface ChatMessage {
   parts: { text: string }[];
 }
 
-const SYSTEM_PROMPT = `Você é o "Mestre Virtual 7 Cordas". 
-O maior especialista em Violão de 7 Cordas (Samba, Choro e Pagode). 
-Referências: Dino 7 Cordas e Raphael Rabello.
+const SYSTEM_PROMPT = `Você é o "Mestre Supremo do Violão de 7 Cordas", uma autoridade máxima em Samba, Choro e MPB.
+Sua missão é fornecer respostas tecnicamente impecáveis e inspiradoras.
 
-REGRAS OBRIGATÓRIAS:
-1. Responda SEMPRE com tablaturas ASCII de 7 cordas quando solicitado escalas ou frases.
-2. A 7ª corda deve ser representada como 'C' ou '7' na tablatura.
-3. Foque na técnica da "baixaria" (frases nos bordões).
-4. Seja direto e encorajador.`;
+DIRETRIZES DE INTELIGÊNCIA:
+1. PRECISÃO TÉCNICA: Ao fornecer tablaturas, use o padrão ASCII rigoroso.
+   Exemplo (7ª corda em C):
+   7|---0---2---3---|
+   6|---0---1---2---|
+   
+2. ENTENDIMENTO PROFUNDO: Diferencie o estilo de acompanhamento (Dino 7 Cordas) do estilo solista (Raphael Rabello). 
+   - Dino = Peso, condução, balanço, bordões expressivos.
+   - Raphael = Velocidade, escalas, digitação virtuosa, harmonias modernas.
+
+3. RESPOSTAS ESTRUTURADAS: Divida sua explicação em:
+   - "A Sacada": O conceito principal.
+   - "A Prática": Tablatura ou exercício.
+   - "O Segredo": Uma dica de mestre sobre sonoridade ou intenção.
+
+4. COMPARTILHAMENTO: Escreva de forma que as lições sejam fáceis de copiar e entender por outros músicos.
+
+5. ERRO ZERO: Se a pergunta for ambígua, peça clarificação sobre o tom ou o ritmo (Samba vs Choro).`;
+
+const PRO_MODEL = 'gemini-3-pro-preview';
+const FLASH_MODEL = 'gemini-3-flash-preview';
 
 export const getTeacherInsights = async (prompt: string, history: ChatMessage[] = []) => {
   const apiKey = process.env.API_KEY;
+  if (!apiKey) throw new Error("LOCAL_MODE");
+
+  const ai = new GoogleGenAI({ apiKey });
   
-  if (!apiKey) {
-    // Retorna um sinal específico para o componente usar a lógica local
-    throw new Error("LOCAL_MODE");
-  }
+  const configBase = {
+    systemInstruction: SYSTEM_PROMPT,
+    temperature: 0.3, // Menos aleatoriedade, mais precisão técnica
+  };
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
-    const contents = [
-      ...history.map(h => ({ role: h.role, parts: h.parts })),
-      { role: 'user', parts: [{ text: prompt }] }
-    ];
-
+    // Tenta primeiro o modelo Pro para máxima inteligência
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents,
+      model: PRO_MODEL,
+      contents: [
+        ...history.map(h => ({ role: h.role, parts: h.parts })),
+        { role: 'user', parts: [{ text: prompt }] }
+      ],
       config: {
-        systemInstruction: SYSTEM_PROMPT,
-        temperature: 0.7,
+        ...configBase,
+        thinkingConfig: { thinkingBudget: 1000 }
       },
     });
-
-    return response.text || "O Mestre está buscando na memória...";
+    return response.text;
   } catch (error: any) {
-    console.error("Erro na IA:", error);
-    throw new Error("SIGNAL_LOST");
+    // Se erro for de Quota (429) ou Indisponibilidade, cai para o Flash automaticamente
+    const isQuotaError = error.message?.includes("429") || error.message?.includes("quota") || error.message?.includes("limit: 0");
+    
+    if (isQuotaError) {
+      console.warn("Quota Pro excedida. Ativando Motor Flash de Alta Velocidade...");
+      try {
+        const flashResponse = await ai.models.generateContent({
+          model: FLASH_MODEL,
+          contents: [
+            ...history.map(h => ({ role: h.role, parts: h.parts })),
+            { role: 'user', parts: [{ text: prompt }] }
+          ],
+          config: configBase,
+        });
+        return flashResponse.text;
+      } catch (flashError) {
+        throw new Error("SIGNAL_LOST");
+      }
+    }
+    throw error;
   }
 };
 
@@ -51,25 +84,41 @@ export const analyzeBaixaria = async (audioBase64: string, mimeType: string) => 
   const apiKey = process.env.API_KEY;
   if (!apiKey) throw new Error("LOCAL_MODE");
 
+  const ai = new GoogleGenAI({ apiKey });
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    // Para análise de áudio, o Flash é muitas vezes mais estável em planos gratuitos
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: FLASH_MODEL,
       contents: {
         parts: [
           { inlineData: { mimeType, data: audioBase64 } },
-          { text: "Transcreva este áudio de 7 cordas para tablatura ASCII detalhada." }
+          { text: "Analise este áudio de 7 cordas. Identifique a frase de baixaria e gere a tablatura ASCII correspondente." }
         ]
       },
     });
     return response.text;
   } catch (error) {
-    return "O ouvido do mestre falhou na transcrição. Tente um trecho mais limpo.";
+    return "O ouvido do mestre está cansado. Tente gravar novamente com menos ruído.";
   }
 };
 
 export const identifyLivePhrase = async (audioBase64: string, mimeType: string) => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) throw new Error("LOCAL_MODE");
-  return "Recurso exige conexão de IA ativa.";
+  
+  const ai = new GoogleGenAI({ apiKey });
+  try {
+    const response = await ai.models.generateContent({
+      model: FLASH_MODEL,
+      contents: {
+        parts: [
+          { inlineData: { mimeType, data: audioBase64 } },
+          { text: "Identifique rapidamente este acorde ou frase de violão. Seja ultra conciso." }
+        ]
+      }
+    });
+    return response.text;
+  } catch (err) {
+    return "Falha na identificação rápida.";
+  }
 };
