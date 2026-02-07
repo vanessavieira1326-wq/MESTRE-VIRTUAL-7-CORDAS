@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Search, Music, Info, Volume2, Play, Bookmark, Monitor, PenTool, ChevronRight } from 'lucide-react';
+import { Search, Music, Info, Play, Volume2, Bookmark, Monitor, PenTool } from 'lucide-react';
 
 interface ChordShape {
   name: string;
@@ -60,18 +60,6 @@ const TYPE_LABELS = {
 
 const GUITAR_FREQS = [65.41, 82.41, 110.00, 146.83, 196.00, 246.94, 329.63];
 
-function makeDistortionCurve(amount: number) {
-  const k = typeof amount === 'number' ? amount : 50;
-  const n_samples = 44100;
-  const curve = new Float32Array(n_samples);
-  const deg = Math.PI / 180;
-  for (let i = 0 ; i < n_samples; ++i ) {
-    const x = i * 2 / n_samples - 1;
-    curve[i] = ( 3 + k ) * x * 20 * deg / ( Math.PI + k * Math.abs(x) );
-  }
-  return curve;
-}
-
 const DigitalFretboard: React.FC<{ frets: number[] }> = ({ frets }) => {
   const activeFrets = frets.filter(f => f > 0);
   const startFret = activeFrets.length > 0 ? Math.max(0, Math.min(...activeFrets) - 1) : 0;
@@ -130,27 +118,23 @@ const ChordLibrary: React.FC = () => {
   const [selectedKey, setSelectedKey] = useState<string>("C");
   const [filterType, setFilterType] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [playing, setPlaying] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'digital' | 'analog'>('digital');
+  const [playing, setPlaying] = useState<string | null>(null);
 
   const playChordSound = useCallback((frets: number[], chordName: string) => {
     const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
     
+    // Compressor para "colar" as notas e evitar clipping
     const compressor = audioCtx.createDynamicsCompressor();
-    compressor.threshold.setValueAtTime(-12, audioCtx.currentTime);
-    compressor.knee.setValueAtTime(20, audioCtx.currentTime);
-    compressor.ratio.setValueAtTime(4, audioCtx.currentTime);
-    compressor.attack.setValueAtTime(0.005, audioCtx.currentTime);
+    compressor.threshold.setValueAtTime(-18, audioCtx.currentTime);
+    compressor.knee.setValueAtTime(40, audioCtx.currentTime);
+    compressor.ratio.setValueAtTime(3, audioCtx.currentTime);
+    compressor.attack.setValueAtTime(0, audioCtx.currentTime);
     compressor.release.setValueAtTime(0.25, audioCtx.currentTime);
 
-    const saturator = audioCtx.createWaveShaper();
-    saturator.curve = makeDistortionCurve(20); // Aço tem uma leve compressão natural
-    saturator.oversample = '4x';
-
     const masterGain = audioCtx.createGain();
-    masterGain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    masterGain.gain.setValueAtTime(0.3, audioCtx.currentTime);
     
-    saturator.connect(compressor);
     compressor.connect(masterGain);
     masterGain.connect(audioCtx.destination);
     
@@ -162,73 +146,68 @@ const ChordLibrary: React.FC = () => {
       const baseFreq = GUITAR_FREQS[stringIdx];
       const freq = baseFreq * Math.pow(2, fret / 12);
       const isBass = stringIdx < 3;
+      // Arpejo natural de polegar e dedos (0.12s entre cordas)
       const startTime = audioCtx.currentTime + (stringIdx * 0.12); 
-      const duration = 5.0; // RESONÂNCIA DE 5 SEGUNDOS (Solicitado)
+      const duration = 5.0; // RESSONÂNCIA DE 5 SEGUNDOS REQUERIDA
 
-      // 1. ATAQUE "AÇO 7C" (Metallic Pluck)
-      // O ataque das cordas de aço é mais agudo e rápido que o nylon.
-      const attackDuration = 0.012;
-      const attackSize = Math.floor(audioCtx.sampleRate * attackDuration);
+      // 1. EXCITAÇÃO (PLUCK) - Pulso Orgânico de Ataque
+      const attackSize = Math.floor(audioCtx.sampleRate * 0.012);
       const attackBuffer = audioCtx.createBuffer(1, attackSize, audioCtx.sampleRate);
       const attackData = attackBuffer.getChannelData(0);
       for (let i = 0; i < attackSize; i++) {
-        // Pulso mais "agudo" usando uma rampa mais íngreme
-        attackData[i] = (Math.sin(Math.PI * i / attackSize)) * (1.0 - i / attackSize);
+        // Ruído filtrado para emular o ataque metálico da corda de aço
+        attackData[i] = (Math.random() * 2 - 1) * Math.cos((Math.PI * i) / attackSize);
       }
       
       const exciter = audioCtx.createBufferSource();
       exciter.buffer = attackBuffer;
       
       const exciterGain = audioCtx.createGain();
-      exciterGain.gain.setValueAtTime(0, startTime);
-      exciterGain.gain.linearRampToValueAtTime(isBass ? 0.5 : 0.35, startTime + 0.002);
-      exciterGain.gain.exponentialRampToValueAtTime(0.001, startTime + attackDuration);
+      exciterGain.gain.setValueAtTime(isBass ? 0.35 : 0.25, startTime);
+      exciterGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.012);
 
-      // 2. MODELAGEM DA CORDA DE AÇO (Feedback Loop Aberto)
-      const delay = audioCtx.createDelay(1/10);
+      // 2. MODELAGEM FÍSICA (DELAY LOOP)
+      const delay = audioCtx.createDelay(1/20);
       delay.delayTime.setValueAtTime(1/freq, startTime);
       
       const feedback = audioCtx.createGain();
-      // Ajuste para 5 segundos exatos de decay
+      // Ajuste preciso para sustentar por exatamente 5 segundos
       const feedbackVal = Math.pow(0.001, (1/freq) / duration);
       feedback.gain.setValueAtTime(feedbackVal, startTime);
       
-      // Amortecimento de Aço (Damping): Maior frequência para brilho metálico
+      // Amortecimento Natural de Aço (Damping)
       const dampFilter = audioCtx.createBiquadFilter();
       dampFilter.type = 'lowpass';
-      // Cordas de aço retêm muito mais harmônicos agudos (8kHz+ no topo)
-      dampFilter.frequency.setValueAtTime(isBass ? 1500 : 8500, startTime);
+      dampFilter.frequency.setValueAtTime(isBass ? 1800 : 7000, startTime);
       dampFilter.Q.setValueAtTime(0.5, startTime);
 
+      // Loop de Ressonância
       exciter.connect(exciterGain);
       exciterGain.connect(delay);
       delay.connect(dampFilter);
       dampFilter.connect(feedback);
       feedback.connect(delay); 
       
-      // 3. RESSONÂNCIA DE CORPO DE AÇO (Bright Wood Resonance)
-      const bodyResonance = audioCtx.createBiquadFilter();
-      bodyResonance.type = 'peaking';
-      bodyResonance.frequency.setValueAtTime(isBass ? 100 : 250, startTime);
-      bodyResonance.gain.setValueAtTime(isBass ? 10 : 4, startTime);
-      bodyResonance.Q.setValueAtTime(1.5, startTime);
+      // 3. RESSONÂNCIA DO CORPO (BODY IMPULSE RESPONSE)
+      const woodResonance = audioCtx.createBiquadFilter();
+      woodResonance.type = 'peaking';
+      woodResonance.frequency.setValueAtTime(isBass ? 92 : 210, startTime);
+      woodResonance.gain.setValueAtTime(isBass ? 12 : 5, startTime);
+      woodResonance.Q.setValueAtTime(1.8, startTime);
 
-      // Ressonância Harmônica (Zing do Aço)
-      const metalZing = audioCtx.createBiquadFilter();
-      metalZing.type = 'peaking';
-      metalZing.frequency.setValueAtTime(isBass ? 3000 : 6000, startTime);
-      metalZing.gain.setValueAtTime(6, startTime);
-      metalZing.Q.setValueAtTime(4.0, startTime);
+      const filterHigh = audioCtx.createBiquadFilter();
+      filterHigh.type = 'lowpass';
+      filterHigh.frequency.setValueAtTime(5500, startTime);
 
       const voiceGain = audioCtx.createGain();
       voiceGain.gain.setValueAtTime(0, startTime);
-      voiceGain.gain.linearRampToValueAtTime(isBass ? 0.8 : 0.5, startTime + 0.015);
+      voiceGain.gain.linearRampToValueAtTime(isBass ? 0.8 : 0.5, startTime + 0.02);
       voiceGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
-      delay.connect(bodyResonance);
-      bodyResonance.connect(metalZing);
-      metalZing.connect(voiceGain);
-      voiceGain.connect(saturator);
+      delay.connect(woodResonance);
+      woodResonance.connect(filterHigh);
+      filterHigh.connect(voiceGain);
+      voiceGain.connect(compressor);
       
       exciter.start(startTime);
     });
@@ -325,7 +304,7 @@ const ChordLibrary: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[8px] font-black bg-white/5 border border-white/10 px-3 py-1 rounded-full text-amber-600 uppercase">
-                      Aço 7C Master
+                      Aço Premium 7C
                     </span>
                   </div>
                 </div>
@@ -349,7 +328,7 @@ const ChordLibrary: React.FC = () => {
                       }`}
                     >
                       {playing === chord.name ? <Volume2 className="w-5 h-5 animate-pulse" /> : <Play className="w-5 h-5 fill-current" />}
-                      {playing === chord.name ? "Harmônicos Brilhantes..." : "Ouvir Acorde (Aço)"}
+                      {playing === chord.name ? "Ressonância 5s..." : "Ouvir Acorde (Aço)"}
                     </button>
                     
                     <button className="p-5 bg-white/5 rounded-[1.5rem] text-slate-500 hover:text-amber-500 border border-white/5 transition-all">
@@ -360,7 +339,7 @@ const ChordLibrary: React.FC = () => {
                   <div className="flex items-center gap-3 p-4 bg-amber-900/5 rounded-2xl border border-amber-600/10">
                     <Info className="w-4 h-4 text-amber-600 shrink-0" />
                     <p className="text-[10px] text-slate-400 leading-relaxed italic">
-                      Dica: Motor de áudio configurado para cordas de aço premium. Ressonância cristalina de 5 segundos.
+                      Dica: Motor de áudio modelado para cordas de aço com sustain longo e harmônicos naturais.
                     </p>
                   </div>
                 </div>
@@ -378,9 +357,9 @@ const ChordLibrary: React.FC = () => {
       <div className="p-4 bg-black/60 border-t border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-          <span className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Steel Master Engine v9.0</span>
+          <span className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Acoustic Engine v12.0</span>
         </div>
-        <div className="text-[8px] font-black text-amber-600/40 uppercase tracking-widest">5s High-Res Fidelity</div>
+        <div className="text-[8px] font-black text-amber-600 uppercase tracking-widest">5s High Fidelity Steel</div>
       </div>
     </div>
   );
