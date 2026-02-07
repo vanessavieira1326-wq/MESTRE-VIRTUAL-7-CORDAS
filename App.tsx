@@ -3,9 +3,8 @@ import React, { useState, useEffect } from 'react';
 import AITeacher from './components/AITeacher';
 import Metronome from './components/Metronome';
 import Tuner from './components/Tuner';
-import SmartEar from './components/SmartEar';
-import BaixariaRadar from './components/BaixariaRadar';
-import { ShieldCheck, Music2, Star, Zap, Music, Download, Link as LinkIcon, GraduationCap } from 'lucide-react';
+import StemStudio from './components/StemStudio';
+import { ShieldCheck, Music2, Star, Zap, Music, GraduationCap } from 'lucide-react';
 
 const musicalNotationFragments = [
   "♩=120", "♫ ♬ ♭", "♯C7M(9)", "♭9/♯11", "|--7--5--|", "𝄞 𝄢", "A/G#", "D7(b9)", "G/B", "E7/D", "|--0-h-2--|", "p.i.m.a", "7ª Corda (C)", "|--x--|", "B7(13)", "Cm7(b5)"
@@ -40,7 +39,7 @@ const AppIcon: React.FC = () => (
     <div className="relative p-1 bg-gradient-to-b from-[#4a2e1d] to-[#0c0604] rounded-2xl shadow-xl border border-[#3d2516]">
       <div className="relative w-12 h-12 md:w-16 md:h-16 rounded-xl overflow-hidden flex items-center justify-center bg-[#1a0f0a]">
         <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]"></div>
-        <Music2 className="relative z-20 w-6 h-6 md:w-8 h-8 text-amber-500/80 drop-shadow-glow" />
+        <Music2 className="relative z-20 w-6 h-6 md:w-8 h text-amber-500/80 drop-shadow-glow" />
       </div>
     </div>
   </div>
@@ -48,7 +47,6 @@ const AppIcon: React.FC = () => (
 
 const App: React.FC = () => {
   const [description, setDescription] = useState("");
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [hasKey, setHasKey] = useState<boolean>(true);
 
   useEffect(() => {
@@ -61,11 +59,6 @@ const App: React.FC = () => {
       }
     };
     checkKey();
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    });
   }, []);
 
   const handleConnectKey = async () => {
@@ -89,7 +82,7 @@ const App: React.FC = () => {
               <h1 className="text-xl md:text-3xl font-black tracking-tighter bg-gradient-to-r from-white to-amber-500 bg-clip-text text-transparent italic leading-none">
                 Mestre 7C
               </h1>
-              <span className="text-[8px] font-black uppercase tracking-[0.3em] text-amber-500/50">Regional Pro</span>
+              <span className="text-[8px] font-black uppercase tracking-[0.3em] text-amber-500/50">Luthier Digital Studio</span>
             </div>
           </div>
           
@@ -112,13 +105,12 @@ const App: React.FC = () => {
 
       <main className="relative z-10 flex-1 w-full max-w-6xl mx-auto px-4 py-4 md:py-8 flex flex-col gap-6">
         
-        {/* Banner Informativo sem bloquear o app */}
         {!hasKey && (
           <div className="bg-amber-600/10 border border-amber-600/20 p-4 rounded-3xl backdrop-blur-md flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <GraduationCap className="w-5 h-5 text-amber-500" />
               <p className="text-[10px] md:text-xs font-medium text-amber-200">
-                O Modo de IA está offline, mas os <strong>Métodos de Estudo</strong> e ferramentas de rádio continuam ativos.
+                O Modo de IA está offline. Conecte sua chave para isolar trilhas e identificar baixarias.
               </p>
             </div>
             <button onClick={handleConnectKey} className="text-[9px] font-black uppercase bg-amber-600 px-3 py-1.5 rounded-lg">Ativar IA</button>
@@ -126,14 +118,13 @@ const App: React.FC = () => {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-12 h-full">
+            <StemStudio />
+          </div>
+          
           <div className="lg:col-span-5 space-y-6">
             <Metronome />
             <Tuner />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-               {/* Ferramentas que funcionam sem IA ou mostram aviso interno */}
-               <BaixariaRadar />
-               <SmartEar />
-            </div>
           </div>
           <div className="lg:col-span-7 h-full">
             <AITeacher />
@@ -148,9 +139,9 @@ const App: React.FC = () => {
 
         <footer className="grid grid-cols-1 md:grid-cols-3 gap-4 py-6 border-t border-white/5 mt-auto">
           {[
-            { icon: ShieldCheck, title: "Bordão", desc: "Técnica de Dino 7 Cordas." },
-            { icon: Star, title: "Método", desc: "Biblioteca offline inclusa." },
-            { icon: Zap, title: "IA Neural", desc: hasKey ? "Conectada" : "Opcional" }
+            { icon: ShieldCheck, title: "Precision", desc: "Separação de canais via Redes Neurais." },
+            { icon: Star, title: "Luthieria", desc: "Análise avançada de bordões 7C." },
+            { icon: Zap, title: "IA Neural", desc: hasKey ? "Estúdio Online" : "Processamento Local" }
           ].map((item, idx) => (
             <div key={idx} className="flex items-center gap-3 p-4 bg-black/20 rounded-2xl border border-white/5 group">
               <item.icon className="w-5 h-5 text-amber-500 shrink-0 group-hover:scale-110 transition-transform" />
