@@ -4,6 +4,8 @@ import AITeacher from './components/AITeacher';
 import Metronome from './components/Metronome';
 import Tuner from './components/Tuner';
 import StemStudio from './components/StemStudio';
+import SmartEar from './components/SmartEar';
+import BaixariaRadar from './components/BaixariaRadar';
 import { ShieldCheck, Music2, Star, Zap, Music, GraduationCap } from 'lucide-react';
 
 const musicalNotationFragments = [
@@ -118,15 +120,21 @@ const App: React.FC = () => {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-12 h-full">
+          {/* Top Section: Stem Studio Mixer */}
+          <div className="lg:col-span-12">
             <StemStudio />
           </div>
           
+          {/* Middle Left: Practice Tools */}
           <div className="lg:col-span-5 space-y-6">
             <Metronome />
             <Tuner />
+            <SmartEar />
           </div>
-          <div className="lg:col-span-7 h-full">
+
+          {/* Middle Right: AI & Radar */}
+          <div className="lg:col-span-7 space-y-6">
+            <BaixariaRadar />
             <AITeacher />
           </div>
         </div>

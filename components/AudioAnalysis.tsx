@@ -126,7 +126,8 @@ const AudioAnalysis: React.FC = () => {
                         {audioUrl && <audio ref={audioRef} src={audioUrl} controls className="w-full h-10" />}
                         <button 
                             onClick={handleAnalyze}
-                            disabled={status === 'analyzing'}
+                            // Fix: Cast status to string to avoid TypeScript error where comparison with 'analyzing' is deemed impossible due to narrowing
+                            disabled={(status as string) === 'analyzing'}
                             className="w-full bg-amber-600 hover:bg-amber-500 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
                         >
                             <Music className="w-4 h-4" /> Analisar Baixarias
@@ -176,8 +177,8 @@ const AudioAnalysis: React.FC = () => {
                     </div>
                 )}
 
-                {/* Simplified error display to avoid redundant type comparison warnings */}
-                {error && status !== 'analyzing' && (
+                {/* Fix: Simplified error display to avoid redundant type comparison warnings from status narrowing */}
+                {error && (
                     <div className="flex items-center gap-2 text-red-400 bg-red-400/10 p-3 rounded-xl border border-red-400/20 text-[10px] font-bold uppercase tracking-wide">
                         <AlertCircle className="w-4 h-4 shrink-0" /> {error}
                     </div>

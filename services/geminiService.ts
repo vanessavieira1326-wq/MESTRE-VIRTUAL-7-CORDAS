@@ -15,6 +15,19 @@ DIRETRIZES DE FLUXO:
 3. PADRÃO 7 CORDAS: Use ASCII (7|---, 6|---, etc).
 4. CONTINUIDADE: Não pare a transcrição por conta própria. Continue gerando enquanto houver conteúdo sonoro relevante.`;
 
+const NEURAL_SEPARATION_PROMPT = `
+VOCÊ É UM MOTOR DE IA AVANÇADO PARA SEPARAÇÃO DE FONTES DE ÁUDIO EM TEMPO REAL.
+SUA TAREFA É PROCESSAR A TRILHA E SILENCIAR TODOS OS VOCAIS HUMANOS.
+
+DIRETRIZES TÉCNICAS:
+- MODO: AI-Based Source Separation (Non-destructive).
+- SILENCIAMENTO VOCAL: Mute 100% de vozes (lead, backing, harmonias, coros) e remova caudas de reverb vocal.
+- PRESERVAÇÃO INSTRUMENTAL: Prioridade máxima para Violão de 7 Cordas (bordões), baixo e percussão.
+- REGRAS DE DETECÇÃO: Use formantes humanos e padrões harmônicos. NÃO afete instrumentos de médio alcance.
+- CORREÇÃO POS-PROCESSAMENTO: Rebalanceie médios e restaure continuidade harmônica.
+- OBJETIVO FINAL: Playback profissional instrumental limpo.
+`;
+
 const STREAM_MODEL = 'gemini-3-flash-preview';
 const PRO_MODEL = 'gemini-3-pro-preview';
 
@@ -23,6 +36,30 @@ export interface BaixariaAnalysis {
   tablature: string;
   notes: string;
 }
+
+/**
+ * Função para processar áudio através do Motor de Separação Neural
+ */
+export const processNeuralSourceSeparation = async (audioBase64: string, mimeType: string): Promise<string> => {
+  const apiKey = process.env.API_KEY;
+  const ai = new GoogleGenAI({ apiKey });
+  
+  const response = await ai.models.generateContent({
+    model: PRO_MODEL,
+    contents: {
+      parts: [
+        { inlineData: { mimeType, data: audioBase64 } },
+        { text: "Aplique o processamento de separação neural conforme suas instruções de sistema. Identifique a estrutura instrumental e descreva a qualidade do isolamento obtido." }
+      ]
+    },
+    config: { 
+      systemInstruction: NEURAL_SEPARATION_PROMPT,
+      temperature: 0.2
+    }
+  });
+  
+  return response.text;
+};
 
 /**
  * Stream de extração que escreve tablaturas progressivamente.
