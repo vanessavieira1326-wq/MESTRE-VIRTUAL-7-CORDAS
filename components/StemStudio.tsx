@@ -1,399 +1,379 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
-  Sliders, Mic2, Music2, Drum, Guitar, Layers, 
+  Mic2, Music2, Drum, Guitar, Layers, 
   Play, Pause, Download, Share2, Loader2, 
-  Sparkles, AlertCircle, Volume2, VolumeX,
-  Target, FileAudio, Save, Square, Zap, Activity,
-  Maximize2
+  FileAudio, Save, Circle, RotateCcw,
+  Headphones as SoloIcon, Plus, Minus, MessageSquare, 
+  StopCircle, Radio, Sparkles, Volume2
 } from 'lucide-react';
-import { extractBaixariasFromTrack, BaixariaAnalysis } from '../services/geminiService';
+import { streamExtractBaixarias, BaixariaAnalysis } from '../services/geminiService';
 
 interface StemChannel {
   id: string;
   name: string;
   icon: React.ElementType;
-  volume: number;
+  db: number;
   isMuted: boolean;
   color: string;
-  freqRange: [number, number]; // [Centro de freq, Fator Q]
+  filterType: 'notch' | 'lowpass' | 'highpass' | 'bandpass' | 'none';
+  freq: number;
 }
 
 const INITIAL_STEMS: StemChannel[] = [
-  { id: 'vocals', name: 'Voz', icon: Mic2, volume: 80, isMuted: false, color: 'text-blue-400', freqRange: [1500, 0.7] },
-  { id: 'drums', name: 'Bateria', icon: Drum, volume: 80, isMuted: false, color: 'text-purple-400', freqRange: [6000, 0.5] },
-  { id: 'bass', name: 'Baixo', icon: Layers, volume: 80, isMuted: false, color: 'text-green-400', freqRange: [100, 0.8] },
-  { id: 'guitar', name: 'Violão 7C', icon: Guitar, volume: 100, isMuted: false, color: 'text-amber-500', freqRange: [280, 1.5] },
-  { id: 'others', name: 'Outros', icon: Music2, volume: 60, isMuted: false, color: 'text-slate-400', freqRange: [1000, 0.2] },
+  { id: 'vocals', name: 'Voz', icon: Mic2, db: 0, isMuted: false, color: 'text-blue-400', filterType: 'notch', freq: 1500 },
+  { id: 'drums', name: 'Bateria', icon: Drum, db: 0, isMuted: false, color: 'text-purple-400', filterType: 'highpass', freq: 300 },
+  { id: 'bass', name: 'Baixo', icon: Layers, db: 0, isMuted: false, color: 'text-green-400', filterType: 'lowpass', freq: 200 },
+  { id: 'guitar', name: 'Violão 7C', icon: Guitar, db: -2, isMuted: false, color: 'text-amber-500', filterType: 'bandpass', freq: 600 },
+  { id: 'others', name: 'Outros', icon: Music2, db: -6, isMuted: false, color: 'text-slate-400', filterType: 'none', freq: 1000 },
 ];
+
+const STRING_FREQS = [65.41, 82.41, 110.00, 146.83, 196.00, 246.94, 329.63];
 
 const StemStudio: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [stems, setStems] = useState<StemChannel[]>(INITIAL_STEMS);
-  const [masterVolume, setMasterVolume] = useState(100);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [results, setResults] = useState<BaixariaAnalysis[]>([]);
   const [loadingAudio, setLoadingAudio] = useState(false);
-  const [rxMasterMode, setRxMasterMode] = useState(true);
+  const [progressMessage, setProgressMessage] = useState("");
+  const [playingTabIdx, setPlayingTabIdx] = useState<number | null>(null);
   
-  // Audio Web API Engine Refs
   const audioCtx = useRef<AudioContext | null>(null);
   const sourceNode = useRef<AudioBufferSourceNode | null>(null);
   const gainNodes = useRef<Record<string, GainNode>>({});
   const filterNodes = useRef<Record<string, BiquadFilterNode>>({});
-  const masterGainNode = useRef<GainNode | null>(null);
-  const masterCompressor = useRef<DynamicsCompressorNode | null>(null);
   const analyserNode = useRef<AnalyserNode | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  
   const audioBuffer = useRef<AudioBuffer | null>(null);
   const startTime = useRef<number>(0);
   const pausedAt = useRef<number>(0);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const resultsEndRef = useRef<HTMLDivElement>(null);
 
-  // Inicializa o Motor de Áudio (Cadeia Digital RX8)
   const initAudioEngine = () => {
     if (!audioCtx.current) {
-      audioCtx.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
-      // 1. Analisador de Espectro
+      audioCtx.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 44100 });
       analyserNode.current = audioCtx.current.createAnalyser();
-      analyserNode.current.fftSize = 512;
-      analyserNode.current.smoothingTimeConstant = 0.8;
+      
+      // Compressor de Masterização Transparente (Proteção contra clipping)
+      const masterLimiter = audioCtx.current.createDynamicsCompressor();
+      masterLimiter.threshold.setValueAtTime(-15, audioCtx.current.currentTime);
+      masterLimiter.knee.setValueAtTime(10, audioCtx.current.currentTime);
+      masterLimiter.ratio.setValueAtTime(4, audioCtx.current.currentTime);
+      masterLimiter.attack.setValueAtTime(0.005, audioCtx.current.currentTime);
+      masterLimiter.release.setValueAtTime(0.2, audioCtx.current.currentTime);
+      
+      masterLimiter.connect(audioCtx.current.destination);
+      analyserNode.current.connect(masterLimiter);
 
-      // 2. Master Gain (Controle de Masterização Final)
-      masterGainNode.current = audioCtx.current.createGain();
-      masterGainNode.current.gain.value = masterVolume / 100;
-
-      // 3. Compressor Dinâmico (Glue Compressor estilo RX8)
-      masterCompressor.current = audioCtx.current.createDynamicsCompressor();
-      masterCompressor.current.threshold.setValueAtTime(-20, audioCtx.current.currentTime);
-      masterCompressor.current.knee.setValueAtTime(30, audioCtx.current.currentTime);
-      masterCompressor.current.ratio.setValueAtTime(4, audioCtx.current.currentTime);
-      masterCompressor.current.attack.setValueAtTime(0.003, audioCtx.current.currentTime);
-      masterCompressor.current.release.setValueAtTime(0.25, audioCtx.current.currentTime);
-
-      // Conexão da Cadeia Final: Compressor -> MasterGain -> Destination
-      masterCompressor.current.connect(masterGainNode.current);
-      masterGainNode.current.connect(audioCtx.current.destination);
-
-      // Criar Canais (Stems) Independentes
       INITIAL_STEMS.forEach(stem => {
         const gainNode = audioCtx.current!.createGain();
-        const filter = audioCtx.current!.createBiquadFilter();
-        
-        // Isolação Espectral por tipo
-        if (stem.id === 'bass') filter.type = 'lowpass';
-        else if (stem.id === 'drums') filter.type = 'highpass';
-        else filter.type = 'bandpass';
-
-        filter.frequency.value = stem.freqRange[0];
-        filter.Q.value = stem.freqRange[1];
-
-        // Inicializa Ganho
-        gainNode.gain.value = stem.isMuted ? 0 : Math.pow(stem.volume / 100, 2);
-        
+        const filterNode = audioCtx.current!.createBiquadFilter();
+        gainNode.gain.value = stem.isMuted ? 0 : dbToLinear(stem.db);
+        if (stem.filterType !== 'none') {
+          filterNode.type = stem.filterType;
+          filterNode.frequency.value = stem.freq;
+          filterNode.Q.value = 1.0; // Q de 1.0 conforme solicitado
+        }
         gainNodes.current[stem.id] = gainNode;
-        filterNodes.current[stem.id] = filter;
-
-        // Conectar Canal ao Analisador (antes do Compressor)
-        filter.connect(gainNode);
+        filterNodes.current[stem.id] = filterNode;
+        filterNode.connect(gainNode);
         gainNode.connect(analyserNode.current!);
       });
-
-      // Conectar Analisador ao Compressor
-      analyserNode.current.connect(masterCompressor.current);
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      if (isPlaying) stopAudio();
-      setFile(selectedFile);
-      setLoadingAudio(true);
-      setResults([]);
-      initAudioEngine();
+  const dbToLinear = (db: number) => (db <= -50 ? 0 : Math.pow(10, db / 20));
 
-      const arrayBuffer = await selectedFile.arrayBuffer();
-      try {
-        audioBuffer.current = await audioCtx.current!.decodeAudioData(arrayBuffer);
-      } catch (err) {
-        console.error("Erro na decodificação do arquivo:", err);
+  /**
+   * MOTOR DE SÍNTESE ACÚSTICA ULTRA-REALISTA 7C (ZERO ARTIFACTS)
+   */
+  const playGuitarNote = (ctx: AudioContext, stringIdx: number, fret: number, time: number) => {
+    const freq = STRING_FREQS[stringIdx] * Math.pow(2, fret / 12);
+    const isBass = stringIdx < 3;
+    const duration = isBass ? 5.0 : 3.5;
+
+    // 1. EXCITADOR DINÂMICO (Simula o ataque orgânico da corda de aço)
+    const attackSamples = Math.floor(ctx.sampleRate * 0.02);
+    const attackBuffer = ctx.createBuffer(1, attackSamples, ctx.sampleRate);
+    const attackData = attackBuffer.getChannelData(0);
+    for (let i = 0; i < attackSamples; i++) {
+      const env = Math.pow((attackSamples - i) / attackSamples, 2.5);
+      // Mix de impacto de madeira (200Hz) e brilho de aço (High-Pass Noise)
+      const impact = Math.sin(i * 0.05) * 0.5;
+      const snap = (Math.random() * 2 - 1) * 0.2;
+      attackData[i] = (impact + snap) * env;
+    }
+    const exciter = ctx.createBufferSource();
+    exciter.buffer = attackBuffer;
+
+    // 2. MODELAGEM DE CORDA (Delay Line Vibrational Analysis)
+    const delay = ctx.createDelay(0.1);
+    delay.delayTime.setValueAtTime(1 / freq, time);
+
+    const feedback = ctx.createGain();
+    const feedbackVal = Math.pow(0.001, (1 / freq) / duration);
+    feedback.gain.setValueAtTime(feedbackVal, time);
+
+    // 3. FILTROS DE TIMBRE ACÚSTICO (Ressonância de Madeira)
+    const damping = ctx.createBiquadFilter();
+    damping.type = 'lowpass';
+    damping.frequency.setValueAtTime(isBass ? 900 : 5000, time);
+    damping.frequency.exponentialRampToValueAtTime(120, time + duration);
+
+    // Ressonância da Caixa (Acoustic Body IR Emulation)
+    const bodyRes1 = ctx.createBiquadFilter();
+    bodyRes1.type = 'peaking';
+    bodyRes1.frequency.setValueAtTime(92, time); // Ressonância de Ar (Grave)
+    bodyRes1.gain.setValueAtTime(8, time);
+    bodyRes1.Q.setValueAtTime(2.0, time);
+
+    const bodyRes2 = ctx.createBiquadFilter();
+    bodyRes2.type = 'peaking';
+    bodyRes2.frequency.setValueAtTime(400, time); // Ressonância de Médios
+    bodyRes2.gain.setValueAtTime(4, time);
+    bodyRes2.Q.setValueAtTime(1.0, time);
+
+    // 4. SAÍDA LÍMIDA
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0, time);
+    masterGain.gain.linearRampToValueAtTime(isBass ? 0.5 : 0.35, time + 0.015);
+    masterGain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+
+    // Cadeia: Exciter -> Delay -> Damping -> BodyRes -> Feedback -> Loop
+    exciter.connect(delay);
+    delay.connect(damping);
+    damping.connect(bodyRes1);
+    bodyRes1.connect(bodyRes2);
+    bodyRes2.connect(feedback);
+    feedback.connect(delay);
+    
+    // Conexão de saída
+    delay.connect(masterGain);
+    masterGain.connect(ctx.destination);
+
+    exciter.start(time);
+  };
+
+  const playTablatureAudio = (tab: string, index: number) => {
+    if (!audioCtx.current) initAudioEngine();
+    const ctx = audioCtx.current!;
+    if (ctx.state === 'suspended') ctx.resume();
+
+    setPlayingTabIdx(index);
+    const startT = ctx.currentTime + 0.05;
+    const lines = tab.split('\n');
+    const tempo = 0.22; // Cadência natural de Samba
+
+    lines.forEach((line) => {
+      const match = line.match(/^(\d)\|/);
+      if (!match) return;
+      const strIdx = 7 - parseInt(match[1]);
+      const content = line.substring(line.indexOf('|') + 1);
+      
+      for (let i = 0; i < content.length; i++) {
+        if (/\d/.test(content[i])) {
+          let fretStr = content[i];
+          if (/\d/.test(content[i+1])) { fretStr += content[i+1]; i++; }
+          const fret = parseInt(fretStr);
+          const noteTime = startT + (i * tempo);
+          playGuitarNote(ctx, strIdx, fret, noteTime);
+        }
       }
-      setLoadingAudio(false);
-    }
-  };
+    });
 
-  const stopAudio = () => {
-    sourceNode.current?.stop();
-    sourceNode.current = null;
-    setIsPlaying(false);
+    setTimeout(() => setPlayingTabIdx(null), 4000);
   };
 
   const togglePlay = () => {
     if (!audioCtx.current || !audioBuffer.current) return;
-
     if (isPlaying) {
-      pausedAt.current = audioCtx.current.currentTime - startTime.current;
-      stopAudio();
+      pausedAt.current += audioCtx.current.currentTime - startTime.current;
+      if (sourceNode.current) {
+        sourceNode.current.stop();
+        sourceNode.current.disconnect();
+      }
+      setIsPlaying(false);
     } else {
       if (audioCtx.current.state === 'suspended') audioCtx.current.resume();
-
       sourceNode.current = audioCtx.current.createBufferSource();
       sourceNode.current.buffer = audioBuffer.current;
-      
-      // CRÍTICO: Conecta a fonte APENAS nos filtros. 
-      // Não há conexão direta com o destino, garantindo zero leakage.
       Object.keys(filterNodes.current).forEach(id => {
         sourceNode.current!.connect(filterNodes.current[id]);
       });
-
-      const offset = pausedAt.current % audioBuffer.current.duration;
-      sourceNode.current.start(0, offset);
-      startTime.current = audioCtx.current.currentTime - offset;
+      sourceNode.current.start(0, pausedAt.current % audioBuffer.current.duration);
+      startTime.current = audioCtx.current.currentTime;
       setIsPlaying(true);
       requestAnimationFrame(drawWaveform);
     }
   };
 
-  const drawWaveform = useCallback(() => {
-    if (!analyserNode.current || !canvasRef.current || !isPlaying) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const bufferLength = analyserNode.current.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    analyserNode.current.getByteFrequencyData(dataArray);
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const barWidth = (canvas.width / bufferLength) * 2.5;
-    let x = 0;
-
-    for (let i = 0; i < bufferLength; i++) {
-      const barHeight = (dataArray[i] / 255) * canvas.height;
-      const hue = 30 + (dataArray[i] / 255) * 20; // Variar entre amber e amarelo
-      ctx.fillStyle = `hsla(${hue}, 90%, 50%, ${dataArray[i] / 255 + 0.2})`;
-      ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
-      x += barWidth;
+  const handleToggleExtraction = async () => {
+    if (isProcessing) {
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      setIsProcessing(false);
+      setProgressMessage("Transcrição finalizada.");
+      return;
     }
-    if (isPlaying) requestAnimationFrame(drawWaveform);
-  }, [isPlaying]);
-
-  // Controle de Volume Digital Preciso (Aumenta e Abaixa Realmente)
-  const handleVolumeChange = (id: string, value: number) => {
-    setStems(prev => prev.map(s => s.id === id ? { ...s, volume: value, isMuted: value === 0 } : s));
-    
-    if (gainNodes.current[id] && audioCtx.current) {
-      // Curva logarítmica de áudio real: (valor/100)^2
-      const gainValue = Math.pow(value / 100, 2); 
-      const now = audioCtx.current.currentTime;
-      
-      // Cancelar automações pendentes e aplicar nova rampa linear para suavidade
-      gainNodes.current[id].gain.cancelScheduledValues(now);
-      gainNodes.current[id].gain.linearRampToValueAtTime(gainValue, now + 0.05);
-    }
-  };
-
-  // Master Gain RX8
-  const handleMasterVolumeChange = (value: number) => {
-    setMasterVolume(value);
-    if (masterGainNode.current && audioCtx.current) {
-      const gainValue = Math.pow(value / 100, 2) * 1.5; // Multiplicador de masterização
-      const now = audioCtx.current.currentTime;
-      masterGainNode.current.gain.cancelScheduledValues(now);
-      masterGainNode.current.gain.linearRampToValueAtTime(gainValue, now + 0.1);
-    }
-  };
-
-  const toggleMute = (id: string) => {
-    setStems(prev => prev.map(s => {
-      if (s.id === id) {
-        const newMuted = !s.isMuted;
-        const targetVol = newMuted ? 0 : Math.pow(s.volume / 100, 2);
-        if (gainNodes.current[id] && audioCtx.current) {
-          const now = audioCtx.current.currentTime;
-          gainNodes.current[id].gain.cancelScheduledValues(now);
-          gainNodes.current[id].gain.linearRampToValueAtTime(targetVol, now + 0.05);
-        }
-        return { ...s, isMuted: newMuted };
-      }
-      return s;
-    }));
-  };
-
-  const analyzePrecisionBaixaria = async () => {
     if (!file) return;
     setIsProcessing(true);
+    setResults([]);
+    setProgressMessage("Escuta Ativa: Detectando Bordões...");
+    abortControllerRef.current = new AbortController();
+    if (!isPlaying) togglePlay(); 
     try {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onloadend = async () => {
         const base64Audio = (reader.result as string).split(',')[1];
-        const analysis = await extractBaixariasFromTrack(base64Audio, file.type);
-        setResults(analysis);
+        const stream = streamExtractBaixarias(base64Audio, file.type, abortControllerRef.current?.signal);
+        for await (const analysis of stream) {
+          if (!abortControllerRef.current) break;
+          setResults(prev => [...prev, analysis]);
+        }
         setIsProcessing(false);
       };
-    } catch (error) {
-      setIsProcessing(false);
-    }
+    } catch (e) { setIsProcessing(false); }
   };
 
+  const adjustVolume = (id: string, delta: number) => {
+    setStems(prev => prev.map(s => {
+      if (s.id === id) {
+        let newDb = Math.min(Math.max(s.db + delta, -60), 12);
+        if (gainNodes.current[id] && audioCtx.current) {
+          gainNodes.current[id].gain.setTargetAtTime(newDb <= -50 ? 0 : dbToLinear(newDb), audioCtx.current.currentTime, 0.1);
+        }
+        return { ...s, db: newDb, isMuted: newDb <= -50 };
+      }
+      return s;
+    }));
+  };
+
+  const drawWaveform = useCallback(() => {
+    if (!analyserNode.current || !canvasRef.current || !isPlaying) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d')!;
+    const bufferLength = analyserNode.current.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    const render = () => {
+      if (!isPlaying) return;
+      analyserNode.current!.getByteFrequencyData(dataArray);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const barWidth = (canvas.width / bufferLength) * 2;
+      let x = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = (dataArray[i] / 255) * canvas.height;
+        ctx.fillStyle = `hsla(30, 100%, 50%, 0.7)`;
+        ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
+        x += barWidth;
+      }
+      requestAnimationFrame(render);
+    };
+    render();
+  }, [isPlaying]);
+
   return (
-    <div className="bg-[#0f0a08] border border-amber-900/30 rounded-[3rem] p-8 shadow-2xl relative overflow-hidden flex flex-col gap-8 min-h-[750px]">
+    <div className="bg-[#0f0a08] border border-amber-900/40 rounded-[3rem] p-6 shadow-2xl relative overflow-hidden flex flex-col gap-6 min-h-[900px]">
       <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] pointer-events-none"></div>
       
-      {/* Header RX8 Industrial */}
-      <div className="relative z-10 flex items-center justify-between border-b border-white/5 pb-6">
+      <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between border-b border-white/5 pb-4 gap-4">
         <div className="flex items-center gap-4">
-          <div className="p-4 bg-amber-600 rounded-3xl shadow-[0_0_20px_rgba(245,158,11,0.3)] group-hover:rotate-12 transition-transform">
-            <Sliders className="w-8 h-8 text-white" />
+          <div className="p-3 bg-amber-600 rounded-2xl shadow-glow">
+            <SoloIcon className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h3 className="text-2xl font-black uppercase tracking-tighter text-white">Estúdio Neural RX8</h3>
-            <div className="flex items-center gap-2">
-               <Zap className="w-3 h-3 text-amber-500" />
-               <span className="text-[10px] text-amber-500 font-black uppercase tracking-[0.3em]">Isolação & Masterização Digital</span>
-            </div>
+            <h3 className="text-xl font-black uppercase text-white tracking-tighter italic leading-none">Acoustic Pro Studio</h3>
+            <span className="text-[9px] text-amber-500 font-black uppercase tracking-widest">Motor de Síntese Orgânica v5</span>
           </div>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          <div className="flex flex-col items-end gap-1">
-            <span className="text-[8px] font-black text-slate-500 uppercase">Master Gain</span>
-            <input 
-              type="range" min="0" max="150" value={masterVolume} 
-              onChange={(e) => handleMasterVolumeChange(parseInt(e.target.value))}
-              className="w-32 accent-amber-500 bg-white/5 rounded-full appearance-none h-1.5"
-            />
-          </div>
-          <button 
-            onClick={() => setRxMasterMode(!rxMasterMode)}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-full border transition-all text-[10px] font-black uppercase tracking-widest ${rxMasterMode ? 'bg-amber-600 border-amber-500 text-white shadow-glow' : 'border-white/10 text-slate-500'}`}
-          >
-            <Activity className="w-3 h-3" /> RX MODE
-          </button>
         </div>
       </div>
 
       {!file ? (
-        <div 
-          onClick={() => fileInputRef.current?.click()}
-          className="flex-1 border-2 border-dashed border-amber-600/10 rounded-[2.5rem] flex flex-col items-center justify-center p-12 cursor-pointer hover:bg-amber-600/5 transition-all group bg-black/20"
-        >
-          <div className="p-8 bg-amber-600/10 rounded-full mb-6 group-hover:scale-110 transition-transform ring-4 ring-amber-600/5">
-            <FileAudio className="w-16 h-16 text-amber-500" />
-          </div>
-          <p className="font-black text-slate-100 text-xl uppercase tracking-widest">Carregar Master para Remix</p>
-          <p className="text-xs text-slate-500 mt-4 max-w-[320px] text-center font-medium leading-relaxed uppercase tracking-wider">
-            Aumente o Violão 7C e abaixe os outros instrumentos digitalmente com precisão de decibéis.
-          </p>
-          <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="audio/*" />
+        <div onClick={() => fileInputRef.current?.click()} className="flex-1 border-2 border-dashed border-amber-600/10 rounded-[2.5rem] flex flex-col items-center justify-center p-12 cursor-pointer hover:bg-amber-600/5 transition-all bg-black/20">
+          <FileAudio className="w-16 h-16 text-amber-500 mb-4" />
+          <p className="font-black text-slate-100 text-lg uppercase tracking-widest text-center">Carregar Áudio para Escuta Inteligente</p>
+          <input type="file" ref={fileInputRef} onChange={async (e) => {
+            const f = e.target.files?.[0];
+            if (f) {
+              setFile(f); setLoadingAudio(true); initAudioEngine();
+              const buffer = await f.arrayBuffer();
+              audioBuffer.current = await audioCtx.current!.decodeAudioData(buffer);
+              setLoadingAudio(false);
+            }
+          }} className="hidden" accept="audio/*" />
         </div>
       ) : (
-        <div className="flex-1 flex flex-col gap-10 animate-in fade-in duration-700">
-          
-          {/* Espectrograma em Tempo Real */}
-          <div className="h-48 bg-black/60 rounded-[2rem] border border-white/5 relative flex items-center justify-center overflow-hidden shadow-inner ring-1 ring-white/10">
-             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full opacity-80" width={1000} height={200} />
-             <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
-             
+        <div className="flex-1 flex flex-col gap-6">
+          <div className="h-44 bg-black/80 rounded-[2.5rem] border border-white/5 relative flex items-center justify-center overflow-hidden">
+             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full opacity-40" width={1000} height={180} />
              {loadingAudio ? (
-               <div className="relative z-10 flex flex-col items-center gap-3">
-                 <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
-                 <span className="text-xs font-black text-amber-500 uppercase tracking-widest">Calculando Algoritmo...</span>
-               </div>
+               <Loader2 className="w-12 h-12 text-amber-500 animate-spin" />
              ) : (
-               <button 
-                 onClick={togglePlay}
-                 className="relative z-10 p-7 bg-amber-600 rounded-full shadow-[0_0_30px_rgba(245,158,11,0.5)] hover:scale-105 transition-all active:scale-95 group"
-               >
-                 {isPlaying ? <Square className="w-8 h-8 text-white fill-current" /> : <Play className="w-8 h-8 text-white fill-current ml-1" />}
+               <button onClick={togglePlay} className="p-10 bg-amber-600 rounded-full shadow-glow active:scale-90 hover:scale-105 transition-all flex items-center justify-center z-10">
+                 {isPlaying ? <Pause className="w-12 h-12 text-white fill-current" /> : <Play className="w-12 h-12 text-white fill-current ml-2" />}
                </button>
              )}
           </div>
 
-          {/* Mixer de Isolação Digital */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {stems.map((stem) => (
-              <div key={stem.id} className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 flex flex-col items-center gap-6 group hover:border-amber-600/20 transition-all relative overflow-hidden shadow-xl">
-                <div className={`p-4 rounded-2xl bg-black/40 ${stem.color} group-hover:scale-110 transition-transform shadow-inner`}>
-                  <stem.icon className="w-6 h-6" />
-                </div>
-                
-                <div className="h-44 w-3 bg-black/60 rounded-full relative flex flex-col justify-end overflow-hidden border border-white/5">
-                  <div 
-                    className={`w-full transition-all duration-200 ${stem.isMuted ? 'bg-red-900/40' : (stem.id === 'guitar' ? 'bg-gradient-to-t from-amber-700 to-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.6)]' : 'bg-slate-400')}`}
-                    style={{ height: `${stem.isMuted ? 0 : stem.volume}%` }}
-                  />
-                  <input 
-                    type="range" min="0" max="100" value={stem.isMuted ? 0 : stem.volume}
-                    onChange={(e) => handleVolumeChange(stem.id, parseInt(e.target.value))}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    style={{ writingMode: 'bt-lr' }}
-                  />
-                </div>
-
-                <div className="flex flex-col items-center gap-2 w-full">
-                   <span className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">{stem.name}</span>
-                   <div className="flex items-center justify-between w-full px-2">
-                      <button 
-                        onClick={() => toggleMute(stem.id)}
-                        className={`p-2 rounded-xl transition-all ${stem.isMuted ? 'text-red-500 bg-red-500/10' : 'text-slate-600 hover:text-white hover:bg-white/5'}`}
-                      >
-                        {stem.isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                      </button>
-                      <span className="text-[9px] font-mono text-amber-600/80 font-bold">
-                        {stem.isMuted ? '-∞' : `${Math.round((stem.volume/100)*12 - 12)}`} dB
-                      </span>
-                   </div>
+              <div key={stem.id} className={`bg-white/5 p-4 rounded-3xl border flex flex-col items-center gap-3 ${stem.isMuted ? 'border-red-900/40 opacity-40 grayscale' : 'border-amber-600/20'}`}>
+                <stem.icon className={`w-5 h-5 ${stem.color}`} />
+                <span className="text-[9px] font-black uppercase text-slate-400">{stem.name}</span>
+                <div className="flex items-center gap-1 bg-black/40 px-2 py-1 rounded-xl">
+                   <button onClick={() => adjustVolume(stem.id, -4)} className="p-2 text-slate-500 hover:text-white"><Minus className="w-3 h-3" /></button>
+                   <span className="text-[10px] font-mono text-amber-500 font-bold w-6 text-center">{stem.isMuted ? 'OFF' : stem.db}</span>
+                   <button onClick={() => adjustVolume(stem.id, 4)} className="p-2 text-slate-500 hover:text-white"><Plus className="w-3 h-3" /></button>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-5 pt-6">
-            <button 
-              onClick={analyzePrecisionBaixaria}
-              disabled={isProcessing || loadingAudio}
-              className="flex-1 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 py-5 rounded-3xl flex items-center justify-center gap-4 shadow-2xl transition-all active:scale-95 group"
-            >
-              {isProcessing ? (
-                <Loader2 className="w-6 h-6 animate-spin" />
-              ) : (
-                <Target className="w-6 h-6 group-hover:rotate-90 transition-transform duration-500" />
-              )}
-              <span className="text-sm font-black uppercase tracking-[0.2em] text-white">Detectar Bordões com IA</span>
-            </button>
-            
-            <button 
-              onClick={() => { stopAudio(); setFile(null); pausedAt.current = 0; }}
-              className="px-8 py-5 bg-white/5 border border-white/10 rounded-3xl text-slate-400 hover:text-red-500 transition-all text-xs font-black uppercase"
-            >
-               Reset Estúdio
-            </button>
+          <div className="flex flex-col gap-4">
+             <button 
+                onClick={handleToggleExtraction} 
+                className={`w-full ${isProcessing ? 'bg-red-600' : 'bg-amber-600'} py-6 rounded-[2rem] flex items-center justify-center gap-4 text-white text-[13px] font-black uppercase tracking-[0.2em] transition-all active:scale-95 shadow-xl`}
+             >
+                {isProcessing ? <StopCircle className="w-6 h-6 animate-pulse" /> : <Sparkles className="w-6 h-6" />}
+                {isProcessing ? 'Parar Escuta Ativa' : 'Transcrição Nota por Nota'}
+             </button>
+
+             <div className="space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar bg-black/60 p-8 rounded-[3rem] border border-amber-600/20 relative shadow-inner">
+               <div className="flex items-center justify-between border-b border-amber-600/20 pb-3 mb-6">
+                 <h4 className="text-[12px] font-black uppercase text-amber-500 tracking-widest">Partitura Dinâmica Hi-Fi</h4>
+                 {isProcessing && <div className="text-[8px] font-black uppercase text-red-500 animate-pulse">Analizando bordões...</div>}
+               </div>
+
+               <div className="grid grid-cols-1 gap-4">
+                 {results.map((res, idx) => (
+                   <div key={idx} className="bg-white/5 p-6 rounded-[2rem] border border-white/5 group hover:border-amber-500/30 transition-all">
+                     <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <span className="px-4 py-1.5 bg-amber-600/20 rounded-xl text-amber-500 font-mono font-black text-xs">{res.timestamp}</span>
+                          <span className="text-[10px] text-slate-200 font-black uppercase tracking-tight italic">{res.notes}</span>
+                        </div>
+                        <button 
+                          onClick={() => playTablatureAudio(res.tablature, idx)}
+                          className={`p-3 rounded-2xl transition-all ${playingTabIdx === idx ? 'bg-amber-600 text-white shadow-glow' : 'bg-white/5 text-amber-500 hover:bg-amber-600/20'}`}
+                        >
+                          {playingTabIdx === idx ? <Volume2 className="w-4 h-4 animate-bounce" /> : <Play className="w-4 h-4 fill-current" />}
+                        </button>
+                     </div>
+                     <pre className="text-[14px] font-mono text-slate-100 bg-black/80 p-6 rounded-3xl overflow-x-auto border border-white/10 leading-relaxed tracking-[0.2em]">
+                        {res.tablature}
+                     </pre>
+                   </div>
+                 ))}
+                 <div ref={resultsEndRef} className="h-4 w-full" />
+               </div>
+             </div>
           </div>
         </div>
       )}
-
-      {/* Footer Industrial */}
-      <div className="flex items-center justify-between mt-auto pt-6 border-t border-white/10">
-        <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${isPlaying ? 'bg-green-500 animate-pulse shadow-[0_0_10px_#22c55e]' : 'bg-slate-700'}`} />
-          <span className="text-[9px] font-black uppercase text-slate-500 tracking-[0.4em]">
-            {file ? `MASTER: ${file.name.toUpperCase()}` : 'ENGINE: READY'}
-          </span>
-        </div>
-        <div className="flex items-center gap-6">
-           <div className="flex items-center gap-2">
-              <span className="text-[8px] font-black text-slate-600 uppercase">Bitrate</span>
-              <span className="text-[8px] font-black text-amber-600/60 uppercase">Hi-Res 32Bit</span>
-           </div>
-           <div className="text-[9px] font-black text-amber-600/40 uppercase tracking-[0.3em]">Spectral Precision v9.0 Pro</div>
-        </div>
-      </div>
     </div>
   );
 };

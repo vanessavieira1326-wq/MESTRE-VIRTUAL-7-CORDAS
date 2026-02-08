@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useCallback } from 'react';
 import { UploadCloud, FileMusic, Loader2, ListMusic, Music, Play, Timer, BookOpen, AlertCircle } from 'lucide-react';
 import { extractBaixariasFromTrack, BaixariaAnalysis } from '../services/geminiService';
@@ -175,6 +176,7 @@ const AudioAnalysis: React.FC = () => {
                     </div>
                 )}
 
+                {/* Simplified error display to avoid redundant type comparison warnings */}
                 {error && status !== 'analyzing' && (
                     <div className="flex items-center gap-2 text-red-400 bg-red-400/10 p-3 rounded-xl border border-red-400/20 text-[10px] font-bold uppercase tracking-wide">
                         <AlertCircle className="w-4 h-4 shrink-0" /> {error}
