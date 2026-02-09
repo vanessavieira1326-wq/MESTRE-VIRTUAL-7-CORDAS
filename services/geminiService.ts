@@ -41,29 +41,27 @@ const PRO_MODEL = 'gemini-3-pro-preview';
 const SYSTEM_CONSULTANCY_PROMPT = `
 VOCÊ É O "MESTRE SUPREMO DO 7 CORDAS", UM CONSULTOR TÉCNICO DE ELITE.
 SUA MISSÃO É FORNECER CONSULTORIA TÉCNICA AVANÇADA PARA VIOLONISTAS DE 7 CORDAS.
+Analise baixarias, harmonia regional e técnica rítmica.
 `;
 
-// Updated to correctly include previous conversation history in the Gemini API request
 export const getTeacherInsights = async (prompt: string, history: any[] = []) => {
-  const apiKey = process.env.API_KEY;
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: PRO_MODEL,
     contents: [...history, { role: 'user', parts: [{ text: prompt }] }],
     config: { systemInstruction: SYSTEM_CONSULTANCY_PROMPT, temperature: 0.7 }
   });
-  return response.text;
+  return response.text || "";
 };
 
 export const detectInstrumentsInAudio = async (audioBase64: string, mimeType: string): Promise<InstrumentDetection> => {
-  const apiKey = process.env.API_KEY;
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: FLASH_MODEL,
     contents: {
       parts: [
         { inlineData: { mimeType, data: audioBase64 } },
-        { text: "Identifique os instrumentos em JSON." }
+        { text: "Identifique os instrumentos em JSON. Retorne apenas o JSON: {vocals, guitar7c, cavaco, bass, pandeiro, drums}" }
       ]
     },
     config: { responseMimeType: "application/json" }
@@ -72,14 +70,13 @@ export const detectInstrumentsInAudio = async (audioBase64: string, mimeType: st
 };
 
 export const extractProfessionalScore = async (audioBase64: string, mimeType: string): Promise<BaixariaAnalysis[]> => {
-  const apiKey = process.env.API_KEY;
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: FLASH_MODEL,
     contents: {
       parts: [
         { inlineData: { mimeType, data: audioBase64 } },
-        { text: "Transcreva baixarias 7C em JSON." }
+        { text: "Transcreva baixarias 7C em JSON. Retorne uma array de objetos com timestamp, tablature, notes." }
       ]
     },
     config: { responseMimeType: "application/json" }
@@ -88,8 +85,7 @@ export const extractProfessionalScore = async (audioBase64: string, mimeType: st
 };
 
 export const getSmart7Voicing = async (request: string): Promise<ChordShape[]> => {
-  const apiKey = process.env.API_KEY;
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: FLASH_MODEL,
     contents: `Sugira 3 voicings de 7 cordas e as escalas correspondentes para: "${request}". Retorne array JSON com name, tab, description, type, frets, scaleTab, scaleNotes, scaleEvents.`,
@@ -99,18 +95,24 @@ export const getSmart7Voicing = async (request: string): Promise<ChordShape[]> =
 };
 
 export const identifyLivePhrase = async (audioBase64: string, mimeType: string): Promise<string> => {
-  const apiKey = process.env.API_KEY;
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: FLASH_MODEL,
-    contents: { parts: [{ inlineData: { mimeType, data: audioBase64 } }, { text: "Identifique a frase." }] }
+    contents: { parts: [{ inlineData: { mimeType, data: audioBase64 } }, { text: "Identifique a frase ou baixaria de 7 cordas presente neste áudio curto." }] }
   });
-  return response.text.trim();
+  return response.text || "";
 };
 
 export const analyzeBaixaria = async (audioBase64: string, mimeType: string): Promise<string> => {
-    const apiKey = process.env.API_KEY;
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: FLASH_MODEL,
       contents: {
+        parts: [
+          { inlineData: { mimeType, data: audioBase64 } },
+          { text: "Analise detalhadamente as baixarias de 7 cordas neste áudio. Descreva a condução harmônica e rítmica." }
+        ]
+      }
+    });
+    return response.text || "";
+};
