@@ -1,46 +1,63 @@
 
 import React, { useState, useMemo, useCallback, useRef } from 'react';
-import { Search, Music, Play, Volume2, Sparkles, Zap, Award } from 'lucide-react';
+import { Search, Play, Volume2, Music2, Info, GraduationCap, Award, Zap, ChevronRight } from 'lucide-react';
+import { getSmart7Voicing, ChordShape, NoteEvent } from '../services/geminiService';
 
-interface ChordShape {
-  name: string;
-  tab: string;
-  description: string;
-  type: 'maior' | 'menor' | 'dominante' | 'diminuto' | 'alterado' | 'especial7';
-  frets: number[]; 
-}
-
-// Frequências base para Violão 7 Cordas (Si, Mi, Lá, Ré, Sol, Si, Mi)
 const GUITAR_FREQS = [61.74, 82.41, 110.00, 146.83, 196.00, 246.94, 329.63];
+const NOTE_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+
+const GREEK_MODES_INFO = {
+  "JÔNICO": { name: "I - Jônico", desc: "Alegre (Escala Maior)", intervals: [0, 2, 4, 5, 7, 9, 11, 12], color: "text-blue-400" },
+  "DÓRICO": { name: "II - Dórico", desc: "Menor com 6ª Maior", intervals: [0, 2, 3, 5, 7, 9, 10, 12], color: "text-emerald-400" },
+  "FRÍGIO": { name: "III - Frígio", desc: "Tensão (2ª Menor)", intervals: [0, 1, 3, 5, 7, 8, 10, 12], color: "text-red-400" },
+  "LÍDIO": { name: "IV - Lídio", desc: "Aberto (4ª Aumentada)", intervals: [0, 2, 4, 6, 7, 9, 11, 12], color: "text-cyan-400" },
+  "MIXOLÍDIO": { name: "V - Mixolídio", desc: "Dominante (7ª Menor)", intervals: [0, 2, 4, 5, 7, 9, 10, 12], color: "text-amber-400" },
+  "EÓLIO": { name: "VI - Eólio", desc: "Melancólico (Menor Natural)", intervals: [0, 2, 3, 5, 7, 8, 10, 12], color: "text-indigo-400" },
+  "LÓCRIO": { name: "VII - Lócrio", desc: "Tenso (5ª Diminuta)", intervals: [0, 1, 3, 5, 6, 8, 10, 12], color: "text-purple-400" }
+};
 
 const getFullChordData = (): Record<string, ChordShape[]> => {
   const keys = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
   const data: Record<string, ChordShape[]> = {};
 
-  const baseShapes: Record<string, { type: 'maior' | 'menor' | 'dominante' | 'diminuto' | 'alterado' | 'especial7', frets: number[], desc: string }> = {
-    "7M": { type: "maior", frets: [0, 0, 2, 2, 0, 1, 0], desc: "Sétima Maior brilhante." },
-    "6": { type: "maior", frets: [0, 0, 2, 2, 2, 2, -1], desc: "Acorde de Sexta regional." },
-    "m7": { type: "menor", frets: [0, 0, 2, 0, 1, 0, 0], desc: "Menor com Sétima clássico." },
-    "m6": { type: "menor", frets: [0, 0, 2, 2, 1, 2, -1], desc: "Menor com Sexta de Choro." },
-    "7": { type: "dominante", frets: [0, 0, 2, 0, 2, 0, 0], desc: "Dominante de Samba." },
-    "7(9)": { type: "dominante", frets: [0, -1, 3, 2, 3, 3, -1], desc: "Sétima e Nona encorpada." },
-    "7(b9)": { type: "alterado", frets: [0, -1, 3, 2, 3, 2, -1], desc: "Tensão de Nona Menor." },
-    "m7(b5)": { type: "diminuto", frets: [-1, 0, 1, 0, 1, 0, -1], desc: "Meio-diminuto (Cadência)." },
-    "dim7": { type: "diminuto", frets: [0, -1, 3, 4, 2, 4, -1], desc: "Diminuto de passagem." },
-    "m(7M)": { type: "menor", frets: [0, 0, 2, 1, 1, 0, 0], desc: "Menor com sétima maior (Dino)." }
+  const baseShapesPerMode: Record<keyof typeof GREEK_MODES_INFO, { suffix: string, type: any, frets: number[] }> = {
+    "JÔNICO": { suffix: "7M", type: "maior", frets: [0, 0, 2, 2, 0, 1, 0] },
+    "DÓRICO": { suffix: "m7", type: "menor", frets: [0, 0, 2, 0, 1, 0, 0] },
+    "FRÍGIO": { suffix: "m7(b9)", type: "menor", frets: [0, 0, 2, 1, 1, 0, 0] },
+    "LÍDIO": { suffix: "7M(#11)", type: "maior", frets: [0, 0, 2, 2, 1, 0, 0] },
+    "MIXOLÍDIO": { suffix: "7", type: "dominante", frets: [0, 0, 2, 0, 2, 0, 0] },
+    "EÓLIO": { suffix: "m", type: "menor", frets: [0, -1, 3, 3, 3, 4, -1] },
+    "LÓCRIO": { suffix: "m7(b5)", type: "diminuto", frets: [-1, 0, 1, 0, 1, 0, -1] }
   };
 
-  keys.forEach((root, index) => {
-    const offset = index;
-    data[root] = Object.entries(baseShapes).map(([suffix, shape]) => {
-      const transposed = shape.frets.map(f => (f === -1 ? -1 : (f + offset)));
+  keys.forEach((root, keyIdx) => {
+    data[root] = Object.entries(baseShapesPerMode).map(([modeKey, shape]) => {
+      const modeInfo = GREEK_MODES_INFO[modeKey as keyof typeof GREEK_MODES_INFO];
+      const transposedFrets = shape.frets.map(f => (f === -1 ? -1 : (f + keyIdx)));
       const t = (f: number) => (f === -1 ? 'x' : f.toString());
+      
+      // Cálculo das Notas da Escala
+      const scaleNotesArr = modeInfo.intervals.map(interval => {
+        const noteIdx = (keyIdx + interval) % 12;
+        return NOTE_NAMES[noteIdx];
+      });
+
+      const scaleEvents: NoteEvent[] = modeInfo.intervals.map((interval, i) => ({
+        time: i * 0.25,
+        string: 5, 
+        fret: interval + keyIdx,
+        duration: 0.3
+      }));
+
       return {
-        name: `${root}${suffix}`,
+        name: `${root}${shape.suffix}`,
         type: shape.type,
-        tab: `E|--${t(transposed[6])}--|\nB|--${t(transposed[5])}--|\nG|--${t(transposed[4])}--|\nD|--${t(transposed[3])}--|\nA|--${t(transposed[2])}--|\nE|--${t(transposed[1])}--|\nB|--${t(transposed[0])}--|`,
-        description: shape.desc,
-        frets: transposed
+        tab: `E|--${t(transposedFrets[6])}--|\nB|--${t(transposedFrets[5])}--|\nG|--${t(transposedFrets[4])}--|\nD|--${t(transposedFrets[3])}--|\nA|--${t(transposedFrets[2])}--|\nE|--${t(transposedFrets[1])}--|\nB|--${t(transposedFrets[0])}--|`,
+        description: `Modo: ${modeInfo.name} - ${modeInfo.desc}`,
+        frets: transposedFrets,
+        scaleNotes: scaleNotesArr.join(" - "),
+        scaleTab: `[${modeInfo.intervals.join(' ')}]`,
+        scaleEvents: scaleEvents
       };
     });
   });
@@ -56,142 +73,143 @@ const ChordLibrary: React.FC = () => {
   const [playing, setPlaying] = useState<string | null>(null);
   const audioCtx = useRef<AudioContext | null>(null);
 
-  const playChordSound = useCallback((frets: number[], chordName: string) => {
-    if (!audioCtx.current) {
-      audioCtx.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
+  const playNote = (ctx: AudioContext, freq: number, startTime: number, duration: number, isBass: boolean) => {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = isBass ? 'triangle' : 'triangle';
+    osc.frequency.setValueAtTime(freq, startTime);
+    g.gain.setValueAtTime(0, startTime);
+    g.gain.linearRampToValueAtTime(isBass ? 0.35 : 0.15, startTime + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.start(startTime);
+    osc.stop(startTime + duration);
+  };
+
+  const playChordAndScale = useCallback((chord: ChordShape) => {
+    if (!audioCtx.current) audioCtx.current = new AudioContext();
     const ctx = audioCtx.current;
     if (ctx.state === 'suspended') ctx.resume();
 
-    // Master Chain Profissional
-    const masterGain = ctx.createGain();
-    const limiter = ctx.createDynamicsCompressor();
-    
-    // Configuração de Limiter/Soft Knee para evitar distorção
-    limiter.threshold.setValueAtTime(-1, ctx.currentTime);
-    limiter.knee.setValueAtTime(0, ctx.currentTime);
-    limiter.ratio.setValueAtTime(20, ctx.currentTime);
-    limiter.attack.setValueAtTime(0, ctx.currentTime);
-    limiter.release.setValueAtTime(0.1, ctx.currentTime);
+    setPlaying(chord.name);
 
-    masterGain.gain.setValueAtTime(0.4, ctx.currentTime);
-    masterGain.connect(limiter);
-    limiter.connect(ctx.destination);
-    
-    setPlaying(chordName);
-    
-    frets.forEach((fret, strIdx) => {
-      if (fret === -1) return;
-      
-      const freq = GUITAR_FREQS[strIdx] * Math.pow(2, fret / 12);
-      const startTime = ctx.currentTime + (strIdx * 0.06); // Arpejo natural
-      const duration = 4.0;
-
-      // 1. Exciter: Ruído Rosa Filtrado para o "Ataque do Aço"
-      const exciterSamples = Math.floor(ctx.sampleRate * 0.01);
-      const exciterBuffer = ctx.createBuffer(1, exciterSamples, ctx.sampleRate);
-      const data = exciterBuffer.getChannelData(0);
-      for (let i = 0; i < exciterSamples; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (exciterSamples * 0.5));
+    chord.frets.forEach((f, i) => {
+      if (f !== -1) {
+        const freq = GUITAR_FREQS[i] * Math.pow(2, f / 12);
+        playNote(ctx, freq, ctx.currentTime + (i * 0.02), 2.0, i < 3);
       }
-      
-      const source = ctx.createBufferSource();
-      source.buffer = exciterBuffer;
-
-      // 2. Linha de Retardo (Física da Corda)
-      const delay = ctx.createDelay(0.1);
-      delay.delayTime.setValueAtTime(1 / freq, startTime);
-      
-      const feedback = ctx.createGain();
-      // Decay proporcional à frequência (cordas graves duram mais)
-      const decayFactor = strIdx < 2 ? 0.994 : 0.985;
-      feedback.gain.setValueAtTime(decayFactor, startTime);
-      
-      // 3. Filtro de Amortecimento (Simula a perda de agudos na vibração)
-      const damping = ctx.createBiquadFilter();
-      damping.type = 'lowpass';
-      damping.frequency.setValueAtTime(strIdx < 3 ? 1500 : 4000, startTime);
-      damping.frequency.exponentialRampToValueAtTime(400, startTime + duration);
-
-      // 4. Ressonância de Corpo (Simula o Violão de Madeira)
-      const bodyRes = ctx.createBiquadFilter();
-      bodyRes.type = 'peaking';
-      bodyRes.frequency.setValueAtTime(strIdx < 2 ? 98 : 196, startTime);
-      bodyRes.gain.setValueAtTime(8, startTime);
-      bodyRes.Q.setValueAtTime(1.2, startTime);
-
-      // Conexões do Loop Karplus-Strong
-      source.connect(delay);
-      delay.connect(damping);
-      damping.connect(bodyRes);
-      bodyRes.connect(feedback);
-      feedback.connect(delay); // Loop de Feedback
-      
-      const outGain = ctx.createGain();
-      outGain.gain.setValueAtTime(0, startTime);
-      outGain.gain.linearRampToValueAtTime(strIdx < 2 ? 0.8 : 0.5, startTime + 0.005);
-      outGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-
-      delay.connect(outGain);
-      outGain.connect(masterGain);
-      
-      source.start(startTime);
     });
 
-    setTimeout(() => setPlaying(null), 4000);
+    if (chord.scaleEvents) {
+        chord.scaleEvents.forEach(e => {
+            const freq = GUITAR_FREQS[2] * Math.pow(2, e.fret / 12); 
+            playNote(ctx, freq, ctx.currentTime + 1.0 + e.time, 0.45, false);
+        });
+    }
+
+    setTimeout(() => setPlaying(null), 4500);
   }, []);
 
   const chordsToShow = useMemo(() => {
-    let list = searchTerm ? Object.values(CHORD_DATA).flat().filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())) : (CHORD_DATA[selectedKey] || []);
-    return list;
+    return searchTerm ? Object.values(CHORD_DATA).flat().filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())) : (CHORD_DATA[selectedKey] || []);
   }, [selectedKey, searchTerm]);
 
   return (
-    <div className="flex flex-col h-full bg-[#0c0604] text-slate-200">
-      <div className="p-4 border-b border-white/5 bg-black/40 overflow-x-auto no-scrollbar flex gap-2">
-        {KEY_LIST.map(key => (
-          <button key={key} onClick={() => { setSelectedKey(key); setSearchTerm(""); }} className={`min-w-[55px] h-12 rounded-2xl text-[11px] font-black border transition-all ${selectedKey === key && !searchTerm ? 'bg-amber-600 border-amber-500 text-white shadow-glow' : 'bg-white/5 border-white/5 text-slate-500'}`}>
-            {key}
-          </button>
-        ))}
-      </div>
-
-      <div className="p-4">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-          <input type="text" placeholder="Buscar acorde ou baixaria..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-11 pr-4 text-xs text-amber-500 font-bold outline-none focus:border-amber-600/50" />
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-        <div className="grid grid-cols-1 gap-6 pb-24">
-          {chordsToShow.map((chord, idx) => (
-            <div key={idx} className="bg-[#150d0a] border border-white/5 rounded-[2.5rem] p-6 shadow-2xl relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-br from-amber-600/5 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
-              
-              <div className="flex items-start justify-between mb-6 relative z-10">
-                <div>
-                  <h3 className="text-4xl font-black text-white italic tracking-tighter">{chord.name}</h3>
-                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{chord.description}</p>
-                </div>
-                <div className="flex flex-col items-end">
-                   <span className="text-[8px] font-black bg-amber-600/10 border border-amber-500/20 px-3 py-1 rounded-full text-amber-500 uppercase">Physical Model v5</span>
-                </div>
-              </div>
-
-              <div className="bg-black/60 p-6 rounded-3xl border border-white/5 font-mono text-amber-500/90 whitespace-pre shadow-inner mb-6 text-center leading-relaxed text-sm">
-                {chord.tab}
-              </div>
-
-              <button 
-                onClick={() => playChordSound(chord.frets, chord.name)} 
-                className={`w-full flex items-center justify-center gap-3 py-5 rounded-[1.5rem] text-[11px] font-black uppercase transition-all border ${playing === chord.name ? 'bg-white text-black border-white' : 'bg-amber-600 border-amber-500 text-white active:scale-95 hover:bg-amber-500'}`}
-              >
-                {playing === chord.name ? <Volume2 className="w-5 h-5 animate-pulse" /> : <Play className="w-5 h-5 fill-current" />}
-                Ouvir Timbre Real
-              </button>
+    <div className="bg-[#1a0f0a] border border-[#3d2516] rounded-[2.5rem] p-6 shadow-2xl relative overflow-hidden flex flex-col gap-6 border-b-8">
+      <div className="absolute inset-0 opacity-5 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] pointer-events-none"></div>
+      
+      <div className="relative z-10 flex flex-col gap-5">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-amber-600/20 rounded-2xl shadow-glow">
+              <GraduationCap className="w-5 h-5 text-amber-500" />
             </div>
-          ))}
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-widest text-white italic">Modos Gregos Regional 7C</h3>
+              <p className="text-[9px] text-amber-500/50 font-black uppercase tracking-[0.2em] mt-1">Leitura de Notas e Escalas</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
+            {KEY_LIST.map(key => (
+              <button 
+                key={key} 
+                onClick={() => setSelectedKey(key)} 
+                className={`min-w-[48px] h-12 rounded-xl text-[10px] font-black border transition-all shrink-0 ${selectedKey === key ? 'bg-amber-600 border-amber-500 text-white shadow-lg scale-110 mx-1' : 'bg-black/40 border-white/5 text-slate-500 hover:text-amber-200'}`}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+            <input 
+              type="text" 
+              placeholder="Ex: Jônico, Dórico, C7M..." 
+              value={searchTerm} 
+              onChange={(e) => setSearchTerm(e.target.value)} 
+              className="w-full bg-black/40 border border-white/10 rounded-2xl py-5 pl-12 pr-4 text-xs text-amber-500 font-bold outline-none focus:border-amber-600 transition-all placeholder:text-zinc-800" 
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+          {chordsToShow.map((chord, idx) => {
+            const modeKey = Object.keys(GREEK_MODES_INFO).find(k => chord.description.includes(k)) as keyof typeof GREEK_MODES_INFO;
+            const modeColor = GREEK_MODES_INFO[modeKey]?.color || "text-amber-500";
+
+            return (
+              <div key={idx} className="bg-black/40 border border-white/5 rounded-[2.5rem] p-6 flex flex-col gap-5 hover:border-amber-600/30 transition-all group relative overflow-hidden shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-3xl font-black text-white italic tracking-tighter">{chord.name}</h4>
+                  <div className={`p-2 rounded-lg bg-zinc-900/50 border border-white/5 ${modeColor}`}>
+                    <Music2 className="w-4 h-4" />
+                  </div>
+                </div>
+                
+                <div className="flex flex-col gap-4">
+                   <div className="bg-zinc-900/40 p-4 rounded-2xl border border-white/5">
+                      <span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest block mb-2">Notas da Escala</span>
+                      <div className={`text-sm font-black tracking-tight ${modeColor} text-center py-1`}>
+                         {chord.scaleNotes}
+                      </div>
+                   </div>
+
+                   <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest">Voicing</span>
+                        <pre className="text-[9px] font-mono text-amber-500/70 bg-black/60 p-2 rounded-xl border border-white/5 leading-tight text-center">
+                          {chord.tab}
+                        </pre>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest">Intervalos</span>
+                        <div className="bg-black/60 p-2 rounded-xl border border-white/5 flex items-center justify-center min-h-[70px]">
+                           <span className="text-[10px] font-mono text-zinc-500">{chord.scaleTab}</span>
+                        </div>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="bg-zinc-900/20 p-3 rounded-2xl border border-white/5">
+                   <p className="text-[10px] text-zinc-400 font-medium leading-tight text-center">
+                     {chord.description.split('-')[1]}
+                   </p>
+                </div>
+
+                <button 
+                  onClick={() => playChordAndScale(chord)} 
+                  className={`w-full flex items-center justify-center gap-3 py-4 rounded-2xl text-[10px] font-black uppercase transition-all shadow-xl ${playing === chord.name ? 'bg-white text-black scale-95' : 'bg-amber-600 text-white hover:bg-amber-500'}`}
+                >
+                  {playing === chord.name ? <Volume2 className="w-4 h-4 animate-pulse" /> : <Play className="w-4 h-4 fill-current" />}
+                  Ouvir Leitura Melódica
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

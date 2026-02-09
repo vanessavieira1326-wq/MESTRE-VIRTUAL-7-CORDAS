@@ -6,7 +6,8 @@ import Tuner from './components/Tuner';
 import StemStudio from './components/StemStudio';
 import SmartEar from './components/SmartEar';
 import BaixariaRadar from './components/BaixariaRadar';
-import { ShieldCheck, Music2, Star, Zap, Music, GraduationCap } from 'lucide-react';
+import ChordLibrary from './components/ChordLibrary';
+import { ShieldCheck, Music2, Star, Zap, Music, GraduationCap, LayoutGrid, Library, Radio, Settings2 } from 'lucide-react';
 
 const musicalNotationFragments = [
   "♩=120", "♫ ♬ ♭", "♯C7M(9)", "♭9/♯11", "|--7--5--|", "𝄞 𝄢", "A/G#", "D7(b9)", "G/B", "E7/D", "|--0-h-2--|", "p.i.m.a", "7ª Corda (C)", "|--x--|", "B7(13)", "Cm7(b5)"
@@ -50,6 +51,7 @@ const AppIcon: React.FC = () => (
 const App: React.FC = () => {
   const [description, setDescription] = useState("");
   const [hasKey, setHasKey] = useState<boolean>(true);
+  const [activeTab, setActiveTab] = useState<'practice' | 'studio' | 'theory'>('practice');
 
   useEffect(() => {
     setDescription(welcomeTexts[Math.floor(Math.random() * welcomeTexts.length)]);
@@ -105,41 +107,58 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="relative z-10 flex-1 w-full max-w-6xl mx-auto px-4 py-4 md:py-8 flex flex-col gap-6">
+      <nav className="sticky top-[80px] z-40 w-full bg-[#0c0604]/80 backdrop-blur-md border-b border-white/5 py-2 px-4">
+        <div className="max-w-6xl mx-auto flex justify-around sm:justify-center sm:gap-8">
+          {[
+            { id: 'practice', label: 'Estudo', icon: Radio },
+            { id: 'studio', label: 'Estúdio', icon: Settings2 },
+            { id: 'theory', label: 'Harmonia', icon: Library }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex flex-col sm:flex-row items-center gap-1 sm:gap-2 px-4 py-2 rounded-xl transition-all ${
+                activeTab === tab.id 
+                ? 'text-amber-500 bg-amber-500/10' 
+                : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <tab.icon className="w-4 h-4" />
+              <span className="text-[10px] font-black uppercase tracking-widest">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      <main className="relative z-10 flex-1 w-full max-w-6xl mx-auto px-4 py-6 md:py-8 flex flex-col gap-6">
         
-        {!hasKey && (
-          <div className="bg-amber-600/10 border border-amber-600/20 p-4 rounded-3xl backdrop-blur-md flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <GraduationCap className="w-5 h-5 text-amber-500" />
-              <p className="text-[10px] md:text-xs font-medium text-amber-200">
-                O Modo de IA está offline. Conecte sua chave para isolar trilhas e identificar baixarias.
-              </p>
-            </div>
-            <button onClick={handleConnectKey} className="text-[9px] font-black uppercase bg-amber-600 px-3 py-1.5 rounded-lg">Ativar IA</button>
+        {activeTab === 'studio' && (
+          <div className="lg:col-span-12 space-y-6 animate-in fade-in zoom-in-95 duration-300">
+            <StemStudio />
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Top Section: Stem Studio Mixer */}
-          <div className="lg:col-span-12">
-            <StemStudio />
-          </div>
-          
-          {/* Middle Left: Practice Tools */}
-          <div className="lg:col-span-5 space-y-6">
-            <Metronome />
-            <Tuner />
-            <SmartEar />
-          </div>
+        {activeTab === 'practice' && (
+          <>
+            <div className="lg:col-span-6 space-y-6 animate-in slide-in-from-left-4 duration-500">
+              <Metronome />
+              <Tuner />
+              <BaixariaRadar />
+            </div>
+            <div className="lg:col-span-6 space-y-6 animate-in slide-in-from-right-4 duration-500">
+              <AITeacher />
+              <SmartEar />
+            </div>
+          </>
+        )}
 
-          {/* Middle Right: AI & Radar */}
-          <div className="lg:col-span-7 space-y-6">
-            <BaixariaRadar />
-            <AITeacher />
+        {activeTab === 'theory' && (
+          <div className="lg:col-span-12 space-y-6 animate-in fade-in zoom-in-95 duration-300">
+            <ChordLibrary />
           </div>
-        </div>
+        )}
 
-        <section className="bg-white/5 p-5 rounded-[1.5rem] border border-white/5 shadow-inner">
+        <section className="bg-white/5 p-5 rounded-[1.5rem] border border-white/5 shadow-inner mt-4">
           <p className="text-slate-400 text-sm md:text-lg leading-relaxed italic border-l-2 border-amber-600 pl-4">
             "{description}"
           </p>
@@ -147,9 +166,9 @@ const App: React.FC = () => {
 
         <footer className="grid grid-cols-1 md:grid-cols-3 gap-4 py-6 border-t border-white/5 mt-auto">
           {[
-            { icon: ShieldCheck, title: "Precision", desc: "Separação de canais via Redes Neurais." },
-            { icon: Star, title: "Luthieria", desc: "Análise avançada de bordões 7C." },
-            { icon: Zap, title: "IA Neural", desc: hasKey ? "Estúdio Online" : "Processamento Local" }
+            { icon: ShieldCheck, title: "Precision", desc: "Separação neural de canais regional." },
+            { icon: Star, title: "Luthieria", desc: "Análise ultra-fina de baixarias 7C." },
+            { icon: Zap, title: "IA Neural", desc: "Sincronização Ativa Ativada." }
           ].map((item, idx) => (
             <div key={idx} className="flex items-center gap-3 p-4 bg-black/20 rounded-2xl border border-white/5 group">
               <item.icon className="w-5 h-5 text-amber-500 shrink-0 group-hover:scale-110 transition-transform" />
