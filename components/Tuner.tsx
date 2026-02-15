@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Mic, MicOff, Volume2, Activity, PlayCircle } from 'lucide-react';
+import { Mic, MicOff, Volume2, Activity, PlayCircle, ArrowLeftRight } from 'lucide-react';
 
 interface TuningNote {
   label: string;
@@ -15,11 +15,11 @@ const Tuner: React.FC = () => {
   const [detectedFreq, setDetectedFreq] = useState<number | null>(null);
   const [isTuned, setIsTuned] = useState(false);
   const [playingRef, setPlayingRef] = useState<number | null>(null);
+  const [cents, setCents] = useState<number>(0);
 
   const audioContext = useRef<AudioContext | null>(null);
   const analyser = useRef<AnalyserNode | null>(null);
   const microphone = useRef<MediaStreamAudioSourceNode | null>(null);
-  const bandpassFilter = useRef<BiquadFilterNode | null>(null);
   const animationRef = useRef<number | null>(null);
 
   const strings = useMemo(() => {
@@ -42,7 +42,6 @@ const Tuner: React.FC = () => {
     const ctx = audioContext.current;
     if (ctx.state === 'suspended') ctx.resume();
 
-    // Se já estiver tocando a mesma nota, para.
     if (playingRef === idx) {
         setPlayingRef(null);
         return;
@@ -52,11 +51,11 @@ const Tuner: React.FC = () => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
-    osc.type = 'triangle'; // Som mais doce para afinagem
+    osc.type = 'triangle';
     osc.frequency.setValueAtTime(freq, ctx.currentTime);
     
     gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.1);
+    gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.1);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.0);
 
     osc.connect(gain);
@@ -73,7 +72,9 @@ const Tuner: React.FC = () => {
     let rms = 0;
     for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
     rms = Math.sqrt(rms / SIZE);
-    if (rms < 0.01) return -1;
+    
+    // Limiar RMS reduzido para 0.005 para captar melhor a 1ª corda (mais fina/menos energia)
+    if (rms < 0.005) return -1;
 
     let r1 = 0, r2 = SIZE - 1, thres = 0.2;
     for (let i = 0; i < SIZE / 2; i++) if (Math.abs(buffer[i]) < thres) { r1 = i; break; }
@@ -95,6 +96,15 @@ const Tuner: React.FC = () => {
         maxpos = i;
       }
     }
+    
+    if (maxpos === -1) return -1;
+    
+    // Interpolação parabólica para maior precisão decimal no HZ
+    let x1 = c[maxpos - 1], x2 = c[maxpos], x3 = c[maxpos + 1];
+    let a = (x1 + x3 - 2 * x2) / 2;
+    let b = (x3 - x1) / 2;
+    if (a) maxpos = maxpos - b / (2 * a);
+
     return sampleRate / maxpos;
   };
 
@@ -105,10 +115,12 @@ const Tuner: React.FC = () => {
     analyser.current.getFloatTimeDomainData(buffer);
     const ac = autoCorrelate(buffer, audioContext.current.sampleRate);
 
-    if (ac !== -1 && ac > 50 && ac < 400) {
+    // Range ajustado para cobrir perfeitamente a 1ª corda Mi (329.63Hz) e harmônicos
+    if (ac !== -1 && ac > 40 && ac < 600) {
       setDetectedFreq(ac);
       let closestIdx = 0;
       let minDiff = Infinity;
+      
       strings.forEach((str, idx) => {
         const diff = Math.abs(ac - str.freq);
         if (diff < minDiff) {
@@ -117,15 +129,22 @@ const Tuner: React.FC = () => {
         }
       });
 
-      if (minDiff < 15) {
+      if (minDiff < 35) { // Tolerância de busca da corda mais próxima aumentada para 35Hz
         setActiveNoteIdx(closestIdx);
-        setIsTuned(minDiff < 1.0);
+        
+        // Cálculo de Cents (logarítmico) para precisão digital
+        const targetFreq = strings[closestIdx].freq;
+        const centsValue = Math.floor(1200 * Math.log2(ac / targetFreq));
+        setCents(centsValue);
+        setIsTuned(Math.abs(centsValue) <= 2); // Considerado afinado se estiver dentro de 2 cents
       } else {
         setIsTuned(false);
+        setCents(0);
       }
     } else {
       setDetectedFreq(null);
       setIsTuned(false);
+      setCents(0);
     }
     animationRef.current = requestAnimationFrame(updatePitch);
   }, [isAutoMode, strings]);
@@ -141,16 +160,13 @@ const Tuner: React.FC = () => {
         if (!audioContext.current) audioContext.current = new AudioContext();
         analyser.current = audioContext.current.createAnalyser();
         analyser.current.fftSize = 2048;
-        bandpassFilter.current = audioContext.current.createBiquadFilter();
-        bandpassFilter.current.type = 'bandpass';
-        bandpassFilter.current.frequency.value = 150;
-        bandpassFilter.current.Q.value = 0.5;
+        
         microphone.current = audioContext.current.createMediaStreamSource(stream);
-        microphone.current.connect(bandpassFilter.current);
-        bandpassFilter.current.connect(analyser.current);
+        microphone.current.connect(analyser.current);
+        
         setIsAutoMode(true);
       } catch (err) {
-        alert("Microfone não disponível.");
+        alert("Erro ao acessar microfone. Verifique as permissões.");
       }
     }
   };
@@ -168,7 +184,7 @@ const Tuner: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-amber-500" />
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Afinador Studio Pro</h3>
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Afinador Digital Master</h3>
           </div>
           
           <div className="flex items-center gap-2">
@@ -177,7 +193,7 @@ const Tuner: React.FC = () => {
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${isAutoMode ? 'bg-amber-600 text-white shadow-glow' : 'bg-white/5 text-amber-500 border border-white/10'}`}
             >
               {isAutoMode ? <Mic className="w-3 h-3 animate-pulse" /> : <MicOff className="w-3 h-3" />}
-              {isAutoMode ? 'Ouvindo...' : 'Ativar Auto'}
+              {isAutoMode ? 'Afinando...' : 'Modo Digital'}
             </button>
 
             <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 gap-1">
@@ -194,28 +210,53 @@ const Tuner: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-black/60 border border-white/5 rounded-2xl p-6 flex flex-col items-center gap-2 backdrop-blur-sm min-h-[120px] justify-center relative">
+        {/* Visor Digital de Frequência */}
+        <div className="bg-black/60 border border-white/5 rounded-2xl p-6 flex flex-col items-center gap-2 backdrop-blur-md min-h-[140px] justify-center relative group">
           {!isAutoMode && !playingRef ? (
-            <div className="text-center space-y-2">
-                <p className="text-[10px] font-black uppercase text-slate-600 tracking-widest italic">Toque em uma corda para ouvir o tom</p>
-                <div className="flex items-center justify-center gap-2 text-amber-600/30">
-                    <Volume2 className="w-4 h-4" />
-                    <span className="text-[8px] font-black uppercase">Modo Manual Ativo</span>
+            <div className="text-center space-y-2 opacity-50">
+                <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest italic">Inicie o monitoramento ou escolha uma nota</p>
+                <div className="flex items-center justify-center gap-2 text-amber-600/20">
+                    <Activity className="w-4 h-4" />
+                    <span className="text-[8px] font-black uppercase">Frequência Digital (Hz)</span>
                 </div>
             </div>
           ) : (
-            <>
-              <div className="flex items-center justify-between w-full px-6">
-                <div className="text-right font-mono text-[10px] text-slate-500 uppercase">Foco: {activeNoteIdx !== null ? strings[activeNoteIdx].freq.toFixed(1) : '--'}Hz</div>
-                <div className={`text-4xl font-black italic tracking-tighter transition-colors ${isTuned ? 'text-green-500 drop-shadow-[0_0_10px_rgba(34,197,94,0.4)]' : 'text-amber-500'}`}>
-                  {detectedFreq ? detectedFreq.toFixed(1) : playingRef !== null ? strings[playingRef].freq.toFixed(1) : '---'} Hz
+            <div className="w-full space-y-4">
+              <div className="flex items-center justify-between w-full px-2">
+                <div className="text-left">
+                   <div className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Corda Alvo</div>
+                   <div className="text-sm font-black text-white">{activeNoteIdx !== null ? `${strings[activeNoteIdx].label} (${strings[activeNoteIdx].note})` : '---'}</div>
                 </div>
-                <div className="text-left font-mono text-[10px] text-slate-500 uppercase">{isTuned ? '✓ AFINADO' : '---'}</div>
+
+                <div className="flex flex-col items-center">
+                  <div className={`text-5xl md:text-6xl font-mono font-black italic tracking-tighter transition-all duration-300 ${isTuned ? 'text-green-500 drop-shadow-[0_0_20px_rgba(34,197,94,0.4)]' : 'text-amber-500'}`}>
+                    {detectedFreq ? detectedFreq.toFixed(2) : playingRef !== null ? strings[playingRef].freq.toFixed(2) : '---'}
+                  </div>
+                  <div className="text-[10px] font-black text-slate-600 tracking-widest mt-1">HERTZ (Hz)</div>
+                </div>
+
+                <div className="text-right">
+                   <div className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Precisão</div>
+                   <div className={`text-sm font-black font-mono ${cents > 0 ? 'text-red-400' : cents < 0 ? 'text-blue-400' : 'text-green-500'}`}>
+                      {cents > 0 ? `+${cents}` : cents < 0 ? cents : '0'} ct
+                   </div>
+                </div>
               </div>
-              <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden mt-4">
-                 <div className={`h-full transition-all duration-300 ${isTuned || playingRef !== null ? 'bg-green-500 w-full' : 'bg-amber-500 w-[60%] mx-auto'}`} />
+              
+              {/* Needle/Guia Visual */}
+              <div className="w-full h-2 bg-zinc-900 rounded-full relative overflow-hidden border border-white/5">
+                 <div 
+                   className={`absolute top-0 bottom-0 transition-all duration-300 ${isTuned ? 'bg-green-500 w-1' : 'bg-amber-500 w-1'}`}
+                   style={{ left: `${50 + (cents / 50) * 50}%` }}
+                 />
+                 <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-white/20 -translate-x-1/2" />
               </div>
-            </>
+              <div className="flex justify-between px-2">
+                 <span className="text-[7px] font-black text-blue-500/50 uppercase">Flat</span>
+                 <span className="text-[7px] font-black text-green-500/50 uppercase italic">Tuned</span>
+                 <span className="text-[7px] font-black text-red-500/50 uppercase">Sharp</span>
+              </div>
+            </div>
           )}
         </div>
 
