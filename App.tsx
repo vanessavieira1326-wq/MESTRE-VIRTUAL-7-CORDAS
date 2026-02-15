@@ -5,9 +5,8 @@ import Metronome from './components/Metronome';
 import Tuner from './components/Tuner';
 import StemStudio from './components/StemStudio';
 import SmartEar from './components/SmartEar';
-import BaixariaRadar from './components/BaixariaRadar';
 import ChordLibrary from './components/ChordLibrary';
-import { ShieldCheck, Music2, Star, Zap, Music, GraduationCap, LayoutGrid, Library, Radio, Settings2 } from 'lucide-react';
+import { ShieldCheck, Music2, Star, Zap, Music, Library, Radio, Settings2 } from 'lucide-react';
 
 const musicalNotationFragments = [
   "♩=120", "♫ ♬ ♭", "♯C7M(9)", "♭9/♯11", "|--7--5--|", "𝄞 𝄢", "A/G#", "D7(b9)", "G/B", "E7/D", "|--0-h-2--|", "p.i.m.a", "7ª Corda (C)", "|--x--|", "B7(13)", "Cm7(b5)"
@@ -84,9 +83,8 @@ const App: React.FC = () => {
             <AppIcon />
             <div>
               <h1 className="text-xl md:text-3xl font-black tracking-tighter bg-gradient-to-r from-white to-amber-500 bg-clip-text text-transparent italic leading-none">
-                Mestre 7C
+                MESTRE 7C
               </h1>
-              <span className="text-[8px] font-black uppercase tracking-[0.3em] text-amber-500/50">Luthier Digital Studio</span>
             </div>
           </div>
           
@@ -139,17 +137,16 @@ const App: React.FC = () => {
         )}
 
         {activeTab === 'practice' && (
-          <>
-            <div className="lg:col-span-6 space-y-6 animate-in slide-in-from-left-4 duration-500">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-6 animate-in slide-in-from-left-4 duration-500">
               <Metronome />
               <Tuner />
-              <BaixariaRadar />
             </div>
-            <div className="lg:col-span-6 space-y-6 animate-in slide-in-from-right-4 duration-500">
-              <AITeacher />
+            <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
               <SmartEar />
+              <AITeacher />
             </div>
-          </>
+          </div>
         )}
 
         {activeTab === 'theory' && (
