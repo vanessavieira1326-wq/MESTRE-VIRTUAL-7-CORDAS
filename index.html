@@ -3,7 +3,7 @@
 <html lang="pt-br">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Mestre Virtual 7 Cordas</title>
     
     <!-- PWA Meta Tags -->
@@ -21,6 +21,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --sat: env(safe-area-inset-top);
+        --sar: env(safe-area-inset-right);
+        --sab: env(safe-area-inset-bottom);
+        --sal: env(safe-area-inset-left);
+      }
       body {
         font-family: 'Inter', sans-serif;
         background-color: #0c0604;
@@ -28,7 +34,12 @@
         margin: 0;
         padding: 0;
         -webkit-font-smoothing: antialiased;
-        overscroll-behavior-y: contain;
+        overscroll-behavior-y: none;
+        height: 100%;
+        width: 100%;
+      }
+      .pb-safe {
+        padding-bottom: var(--sab);
       }
       h1, h2, h3, h4 {
         font-family: 'Playfair Display', serif;
@@ -48,6 +59,13 @@
       }
       .drop-shadow-glow {
         filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.4));
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
       }
     </style>
     <script type="importmap">
