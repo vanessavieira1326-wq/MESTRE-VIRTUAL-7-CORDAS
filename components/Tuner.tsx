@@ -73,8 +73,8 @@ const Tuner: React.FC = () => {
     for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
     rms = Math.sqrt(rms / SIZE);
     
-    // Limiar RMS reduzido para 0.005 para captar melhor a 1ª corda (mais fina/menos energia)
-    if (rms < 0.005) return -1;
+    // Limiar RMS reduzido para captar melhor a vibração da 1ª corda
+    if (rms < 0.003) return -1;
 
     let r1 = 0, r2 = SIZE - 1, thres = 0.2;
     for (let i = 0; i < SIZE / 2; i++) if (Math.abs(buffer[i]) < thres) { r1 = i; break; }
@@ -99,7 +99,6 @@ const Tuner: React.FC = () => {
     
     if (maxpos === -1) return -1;
     
-    // Interpolação parabólica para maior precisão decimal no HZ
     let x1 = c[maxpos - 1], x2 = c[maxpos], x3 = c[maxpos + 1];
     let a = (x1 + x3 - 2 * x2) / 2;
     let b = (x3 - x1) / 2;
@@ -115,8 +114,8 @@ const Tuner: React.FC = () => {
     analyser.current.getFloatTimeDomainData(buffer);
     const ac = autoCorrelate(buffer, audioContext.current.sampleRate);
 
-    // Range ajustado para cobrir perfeitamente a 1ª corda Mi (329.63Hz) e harmônicos
-    if (ac !== -1 && ac > 40 && ac < 600) {
+    // Range expandido para garantir captura da 1ª corda e seus harmônicos
+    if (ac !== -1 && ac > 40 && ac < 1000) {
       setDetectedFreq(ac);
       let closestIdx = 0;
       let minDiff = Infinity;
@@ -129,14 +128,14 @@ const Tuner: React.FC = () => {
         }
       });
 
-      if (minDiff < 35) { // Tolerância de busca da corda mais próxima aumentada para 35Hz
+      // Tolerância aumentada para facilitar a detecção da corda correta
+      if (minDiff < 45) { 
         setActiveNoteIdx(closestIdx);
         
-        // Cálculo de Cents (logarítmico) para precisão digital
         const targetFreq = strings[closestIdx].freq;
         const centsValue = Math.floor(1200 * Math.log2(ac / targetFreq));
         setCents(centsValue);
-        setIsTuned(Math.abs(centsValue) <= 2); // Considerado afinado se estiver dentro de 2 cents
+        setIsTuned(Math.abs(centsValue) <= 2); 
       } else {
         setIsTuned(false);
         setCents(0);
@@ -210,51 +209,50 @@ const Tuner: React.FC = () => {
           </div>
         </div>
 
-        {/* Visor Digital de Frequência */}
-        <div className="bg-black/60 border border-white/5 rounded-2xl p-6 flex flex-col items-center gap-2 backdrop-blur-md min-h-[140px] justify-center relative group">
+        {/* Visor Digital - Ajustado para exibir Mi 1ª Corda (329.63Hz) */}
+        <div className="bg-black/80 border border-white/5 rounded-2xl p-6 flex flex-col items-center gap-2 backdrop-blur-md min-h-[140px] justify-center relative group shadow-inner">
           {!isAutoMode && !playingRef ? (
             <div className="text-center space-y-2 opacity-50">
-                <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest italic">Inicie o monitoramento ou escolha uma nota</p>
+                <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest italic">Inicie o monitoramento digital</p>
                 <div className="flex items-center justify-center gap-2 text-amber-600/20">
                     <Activity className="w-4 h-4" />
-                    <span className="text-[8px] font-black uppercase">Frequência Digital (Hz)</span>
+                    <span className="text-[8px] font-black uppercase">Frequência Master (Hz)</span>
                 </div>
             </div>
           ) : (
             <div className="w-full space-y-4">
               <div className="flex items-center justify-between w-full px-2">
                 <div className="text-left">
-                   <div className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Corda Alvo</div>
+                   <div className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Corda</div>
                    <div className="text-sm font-black text-white">{activeNoteIdx !== null ? `${strings[activeNoteIdx].label} (${strings[activeNoteIdx].note})` : '---'}</div>
                 </div>
 
                 <div className="flex flex-col items-center">
-                  <div className={`text-5xl md:text-6xl font-mono font-black italic tracking-tighter transition-all duration-300 ${isTuned ? 'text-green-500 drop-shadow-[0_0_20px_rgba(34,197,94,0.4)]' : 'text-amber-500'}`}>
-                    {detectedFreq ? detectedFreq.toFixed(2) : playingRef !== null ? strings[playingRef].freq.toFixed(2) : '---'}
+                  <div className={`text-5xl md:text-7xl font-mono font-black italic tracking-tighter transition-all duration-300 ${isTuned ? 'text-green-500 drop-shadow-[0_0_20px_rgba(34,197,94,0.6)]' : 'text-amber-500'}`} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {detectedFreq ? detectedFreq.toFixed(2) : playingRef !== null ? strings[playingRef].freq.toFixed(2) : '000.00'}
                   </div>
                   <div className="text-[10px] font-black text-slate-600 tracking-widest mt-1">HERTZ (Hz)</div>
                 </div>
 
                 <div className="text-right">
-                   <div className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Precisão</div>
+                   <div className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Offset</div>
                    <div className={`text-sm font-black font-mono ${cents > 0 ? 'text-red-400' : cents < 0 ? 'text-blue-400' : 'text-green-500'}`}>
                       {cents > 0 ? `+${cents}` : cents < 0 ? cents : '0'} ct
                    </div>
                 </div>
               </div>
               
-              {/* Needle/Guia Visual */}
               <div className="w-full h-2 bg-zinc-900 rounded-full relative overflow-hidden border border-white/5">
                  <div 
-                   className={`absolute top-0 bottom-0 transition-all duration-300 ${isTuned ? 'bg-green-500 w-1' : 'bg-amber-500 w-1'}`}
+                   className={`absolute top-0 bottom-0 transition-all duration-300 ${isTuned ? 'bg-green-500 w-1.5 shadow-glow' : 'bg-amber-500 w-1'}`}
                    style={{ left: `${50 + (cents / 50) * 50}%` }}
                  />
                  <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-white/20 -translate-x-1/2" />
               </div>
               <div className="flex justify-between px-2">
-                 <span className="text-[7px] font-black text-blue-500/50 uppercase">Flat</span>
-                 <span className="text-[7px] font-black text-green-500/50 uppercase italic">Tuned</span>
-                 <span className="text-[7px] font-black text-red-500/50 uppercase">Sharp</span>
+                 <span className="text-[7px] font-black text-blue-500/50 uppercase italic">Bemol</span>
+                 <span className="text-[7px] font-black text-green-500/80 uppercase italic tracking-widest">OK</span>
+                 <span className="text-[7px] font-black text-red-500/50 uppercase italic">Sustenido</span>
               </div>
             </div>
           )}
