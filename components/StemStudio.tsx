@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Mic2, Music2, Drum, Guitar, 
@@ -6,67 +5,60 @@ import {
   Plus, Minus, Activity, VolumeX, Waves,
   ChevronUp, ChevronDown, Search, Infinity, Mic, Sparkles, 
   Zap, Crown, Download, Piano, Clock, Layers,
-  Sliders, Wand2, AudioLines, Speaker
+  Sliders, Wand2, AudioLines, Speaker, Settings2
 } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+
+interface StemFX {
+  volume: number;
+  bass: number;
+  mid: number;
+  treble: number;
+  balance: number;
+  isMuted: boolean;
+}
 
 interface StemChannel {
   id: string;
   name: string;
   icon: React.ElementType;
-  level: number;
-  isMuted: boolean;
   color: string;
+  freqRange: { freq: number; Q: number; type: BiquadFilterType };
 }
 
-const INITIAL_STEMS: StemChannel[] = [
-  { id: 'guitar7c', name: 'Violão 7C', icon: Guitar, level: 100, isMuted: false, color: 'text-amber-500' },
-  { id: 'vocal', name: 'Vocal', icon: Mic2, level: 30, isMuted: false, color: 'text-blue-400' },
-  { id: 'piano', name: 'Harmonia', icon: Piano, level: 40, isMuted: false, color: 'text-indigo-400' },
-  { id: 'bateria', name: 'Rítmica', icon: Drum, level: 50, isMuted: false, color: 'text-emerald-400' },
-  { id: 'baixo', name: 'Baixo', icon: Music2, level: 55, isMuted: false, color: 'text-purple-400' },
+const STEM_CONFIGS: StemChannel[] = [
+  { id: 'guitar7c', name: 'Violão 7C', icon: Guitar, color: 'text-amber-500', freqRange: { freq: 180, Q: 1.5, type: 'peaking' } },
+  { id: 'vocal', name: 'Vocal', icon: Mic2, color: 'text-blue-400', freqRange: { freq: 1200, Q: 0.6, type: 'peaking' } },
+  { id: 'bateria', name: 'Bateria', icon: Drum, color: 'text-emerald-400', freqRange: { freq: 6000, Q: 0.4, type: 'highshelf' } },
+  { id: 'baixo', name: 'Baixo', icon: Music2, color: 'text-purple-400', freqRange: { freq: 80, Q: 1.2, type: 'lowshelf' } },
+  { id: 'outros', name: 'Harmonia', icon: Piano, color: 'text-indigo-400', freqRange: { freq: 600, Q: 0.8, type: 'peaking' } },
 ];
 
 const StemStudio: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
-  const [stems, setStems] = useState<StemChannel[]>(INITIAL_STEMS);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
-  const [masterVolume, setMasterVolume] = useState(85);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [waveformData, setWaveformData] = useState<number[]>([]);
   const [karaokeMode, setKaraokeMode] = useState(false);
-  const [showConsole, setShowConsole] = useState<'eq' | 'fx' | 'stems'>('stems');
+  const [expandedStem, setExpandedStem] = useState<string | null>(null);
 
-  // Master Audio FX State
-  const [bass, setBass] = useState(6); 
-  const [mid, setMid] = useState(0);   
-  const [treble, setTreble] = useState(4); 
-  const [balance, setBalance] = useState(0); 
-  const [distortion, setDistortion] = useState(0); 
+  // Estado de FX por Canal
+  const [stemsFX, setStemsFX] = useState<Record<string, StemFX>>(
+    STEM_CONFIGS.reduce((acc, stem) => ({
+      ...acc,
+      [stem.id]: { volume: stem.id === 'guitar7c' ? 100 : 50, bass: 0, mid: 0, treble: 0, balance: 0, isMuted: false }
+    }), {})
+  );
 
   const audioCtx = useRef<AudioContext | null>(null);
   const sourceNode = useRef<AudioBufferSourceNode | null>(null);
   const audioBuffer = useRef<AudioBuffer | null>(null);
   
-  // Audio Nodes Chain
-  const masterGainNode = useRef<GainNode | null>(null);
-  const pannerNode = useRef<StereoPannerNode | null>(null);
-  const distNode = useRef<WaveShaperNode | null>(null);
-  
-  // EQ Nodes
-  const bassFilter = useRef<BiquadFilterNode | null>(null);
-  const midFilter = useRef<BiquadFilterNode | null>(null);
-  const trebleFilter = useRef<BiquadFilterNode | null>(null);
-  
-  // Stem Isolators (Vocal Kill System)
-  const vocalInverterNode = useRef<GainNode | null>(null); // For Phase Cancellation
-  const splitterNode = useRef<ChannelSplitterNode | null>(null);
-  const mergerNode = useRef<ChannelMergerNode | null>(null);
-  const vocalNotchFilter = useRef<BiquadFilterNode | null>(null);
-  const guitarBoostNode = useRef<BiquadFilterNode | null>(null);
+  // Audio Nodes Map
+  const stemFilters = useRef<Record<string, { bass: BiquadFilterNode; mid: BiquadFilterNode; treble: BiquadFilterNode; gain: GainNode; panner: StereoPannerNode; kill: BiquadFilterNode }>>({});
+  const masterGain = useRef<GainNode | null>(null);
 
   const startTime = useRef<number>(0);
   const offsetTime = useRef<number>(0);
@@ -78,102 +70,80 @@ const StemStudio: React.FC = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const makeDistortionCurve = (amount: number) => {
-    const k = amount;
-    const n_samples = 44100;
-    const curve = new Float32Array(n_samples);
-    for (let i = 0; i < n_samples; ++i) {
-      const x = (i * 2) / n_samples - 1;
-      curve[i] = ((3 + k) * x * 20 * (Math.PI / 180)) / (Math.PI + k * Math.abs(x));
-    }
-    return curve;
-  };
-
   const initAudioEngine = useCallback(() => {
     if (audioCtx.current) return;
     audioCtx.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     const ctx = audioCtx.current;
 
-    // Create Nodes
-    masterGainNode.current = ctx.createGain();
-    pannerNode.current = ctx.createStereoPanner();
-    distNode.current = ctx.createWaveShaper();
-    
-    // Vocal Extraction/Removal Engine (Center Cut Phase Cancellation)
-    splitterNode.current = ctx.createChannelSplitter(2);
-    mergerNode.current = ctx.createChannelMerger(2);
-    vocalInverterNode.current = ctx.createGain(); // Inverts Right to cancel Center
-    vocalInverterNode.current.gain.value = karaokeMode ? -1 : 1;
+    masterGain.current = ctx.createGain();
+    masterGain.current.connect(ctx.destination);
 
-    // Surgical EQ for Stems
-    vocalNotchFilter.current = ctx.createBiquadFilter();
-    vocalNotchFilter.current.type = 'peaking';
-    vocalNotchFilter.current.frequency.value = 1200;
-    vocalNotchFilter.current.Q.value = 0.6;
+    STEM_CONFIGS.forEach(stem => {
+      const kill = ctx.createBiquadFilter();
+      kill.type = stem.freqRange.type;
+      kill.frequency.value = stem.freqRange.freq;
+      kill.Q.value = stem.freqRange.Q;
 
-    guitarBoostNode.current = ctx.createBiquadFilter();
-    guitarBoostNode.current.type = 'peaking';
-    guitarBoostNode.current.frequency.value = 180;
-    guitarBoostNode.current.Q.value = 1.2;
+      const bass = ctx.createBiquadFilter();
+      bass.type = 'lowshelf';
+      bass.frequency.value = 200;
 
-    // Standard EQ
-    bassFilter.current = ctx.createBiquadFilter();
-    bassFilter.current.type = 'lowshelf';
-    bassFilter.current.frequency.value = 250;
+      const mid = ctx.createBiquadFilter();
+      mid.type = 'peaking';
+      mid.frequency.value = 1000;
 
-    midFilter.current = ctx.createBiquadFilter();
-    midFilter.current.type = 'peaking';
-    midFilter.current.frequency.value = 1000;
+      const treble = ctx.createBiquadFilter();
+      treble.type = 'highshelf';
+      treble.frequency.value = 3000;
 
-    trebleFilter.current = ctx.createBiquadFilter();
-    trebleFilter.current.type = 'highshelf';
-    trebleFilter.current.frequency.value = 3000;
+      const gain = ctx.createGain();
+      const panner = ctx.createStereoPanner();
 
-    // Connections Chain
-    // Source -> Splitter -> Merger (Karaoke Logic) -> Filters -> FX -> Master
-    // (Actual connection happens in togglePlay when source is created)
-    
-    // Static FX Chain
-    vocalNotchFilter.current.connect(guitarBoostNode.current);
-    guitarBoostNode.current.connect(distNode.current);
-    distNode.current.connect(bassFilter.current);
-    bassFilter.current.connect(midFilter.current);
-    midFilter.current.connect(trebleFilter.current);
-    trebleFilter.current.connect(pannerNode.current);
-    pannerNode.current.connect(masterGainNode.current);
-    masterGainNode.current.connect(ctx.destination);
+      // Chain: Source -> Kill -> Bass -> Mid -> Treble -> Gain -> Panner -> Master
+      kill.connect(bass);
+      bass.connect(mid);
+      mid.connect(treble);
+      treble.connect(gain);
+      gain.connect(panner);
+      panner.connect(masterGain.current!);
 
-    // Initial Values
-    masterGainNode.current.gain.value = masterVolume / 100;
-    pannerNode.current.pan.value = balance;
-    bassFilter.current.gain.value = bass;
-    midFilter.current.gain.value = mid;
-    trebleFilter.current.gain.value = treble;
-  }, [masterVolume, balance, bass, mid, treble, karaokeMode]);
+      stemFilters.current[stem.id] = { kill, bass, mid, treble, gain, panner };
+      
+      // Aplicar valores iniciais
+      const fx = stemsFX[stem.id];
+      gain.gain.value = fx.isMuted ? 0 : (fx.volume / 100);
+      panner.pan.value = fx.balance;
+    });
+  }, [stemsFX]);
 
-  useEffect(() => {
-    if (masterGainNode.current && audioCtx.current) {
-      masterGainNode.current.gain.setTargetAtTime(masterVolume / 100, audioCtx.current.currentTime, 0.05);
-    }
-  }, [masterVolume]);
+  const updateFX = (id: string, key: keyof StemFX, value: any) => {
+    setStemsFX(prev => {
+      const newFX = { ...prev[id], [key]: value };
+      
+      if (audioCtx.current && stemFilters.current[id]) {
+        const nodes = stemFilters.current[id];
+        const ctx = audioCtx.current;
 
-  useEffect(() => {
-    if (pannerNode.current && audioCtx.current) {
-      pannerNode.current.pan.setTargetAtTime(balance, audioCtx.current.currentTime, 0.1);
-    }
-  }, [balance]);
-
-  useEffect(() => {
-    if (distNode.current && audioCtx.current) {
-      distNode.current.curve = distortion > 0 ? makeDistortionCurve(distortion) : null;
-    }
-  }, [distortion]);
-
-  useEffect(() => {
-    if (bassFilter.current && audioCtx.current) bassFilter.current.gain.setTargetAtTime(bass, audioCtx.current.currentTime, 0.1);
-    if (midFilter.current && audioCtx.current) midFilter.current.gain.setTargetAtTime(mid, audioCtx.current.currentTime, 0.1);
-    if (trebleFilter.current && audioCtx.current) trebleFilter.current.gain.setTargetAtTime(treble, audioCtx.current.currentTime, 0.1);
-  }, [bass, mid, treble]);
+        switch(key) {
+          case 'volume': 
+          case 'isMuted':
+            const targetGain = (newFX.isMuted || (id === 'vocal' && karaokeMode)) ? 0 : (newFX.volume / 100);
+            nodes.gain.gain.setTargetAtTime(targetGain, ctx.currentTime, 0.1);
+            // Se for vocal e volume 0, usamos o filtro de 'kill' para remoção total
+            if (id === 'vocal') {
+                const killGain = (newFX.volume === 0 || karaokeMode) ? -40 : 0;
+                nodes.kill.gain.setTargetAtTime(killGain, ctx.currentTime, 0.1);
+            }
+            break;
+          case 'bass': nodes.bass.gain.setTargetAtTime(value, ctx.currentTime, 0.1); break;
+          case 'mid': nodes.mid.gain.setTargetAtTime(value, ctx.currentTime, 0.1); break;
+          case 'treble': nodes.treble.gain.setTargetAtTime(value, ctx.currentTime, 0.1); break;
+          case 'balance': nodes.panner.pan.setTargetAtTime(value, ctx.currentTime, 0.1); break;
+        }
+      }
+      return { ...prev, [id]: newFX };
+    });
+  };
 
   const togglePlay = () => {
     if (!audioCtx.current || !audioBuffer.current) return;
@@ -187,24 +157,10 @@ const StemStudio: React.FC = () => {
       sourceNode.current.buffer = audioBuffer.current;
       sourceNode.current.playbackRate.value = playbackSpeed;
       
-      // Setup Vocal Kill Routing
-      const ctx = audioCtx.current;
-      const src = sourceNode.current;
-      
-      if (karaokeMode) {
-        // Advanced Vocal Removal: Phase Inversion of Center Channel
-        src.connect(splitterNode.current!);
-        // Left goes directly
-        splitterNode.current!.connect(mergerNode.current!, 0, 0);
-        // Right is inverted and merged to both
-        splitterNode.current!.connect(vocalInverterNode.current!, 1);
-        vocalInverterNode.current!.connect(mergerNode.current!, 0, 0);
-        vocalInverterNode.current!.connect(mergerNode.current!, 0, 1);
-        
-        mergerNode.current!.connect(vocalNotchFilter.current!);
-      } else {
-        src.connect(vocalNotchFilter.current!);
-      }
+      // Conectar source a todos os canais de processamento
+      STEM_CONFIGS.forEach(stem => {
+        sourceNode.current?.connect(stemFilters.current[stem.id].kill);
+      });
       
       sourceNode.current.start(0, currentTime);
       startTime.current = audioCtx.current.currentTime;
@@ -212,40 +168,16 @@ const StemStudio: React.FC = () => {
     }
   };
 
-  const updateStemLevel = (id: string, delta: number) => {
-    setStems(prev => prev.map(s => {
-      if (s.id === id) {
-        const newLevel = Math.min(100, Math.max(0, s.level + delta));
-        if (audioCtx.current) {
-          if (id === 'vocal') {
-            const isKill = newLevel === 0 || karaokeMode;
-            vocalNotchFilter.current!.gain.setTargetAtTime(isKill ? -40 : (newLevel - 50) / 2, audioCtx.current.currentTime, 0.1);
-          } else if (id === 'guitar7c') {
-            // Precision 7C Boost: Enhance frequencies of 7-string bass lines
-            guitarBoostNode.current!.gain.setTargetAtTime((newLevel - 50) / 1.5, audioCtx.current.currentTime, 0.1);
-          }
-        }
-        return { ...s, level: newLevel };
-      }
-      return s;
-    }));
-  };
-
   const toggleKaraoke = () => {
     const newMode = !karaokeMode;
     setKaraokeMode(newMode);
-    
-    // Stop and restart for re-routing phase cancellation
-    if (isPlaying) {
-      sourceNode.current?.stop();
-      offsetTime.current = currentTime;
-      setIsPlaying(false);
-      setTimeout(() => togglePlay(), 50);
-    }
-    
-    if (audioCtx.current && vocalNotchFilter.current) {
-      vocalNotchFilter.current.gain.setTargetAtTime(newMode ? -40 : 0, audioCtx.current.currentTime, 0.1);
-      if (vocalInverterNode.current) vocalInverterNode.current.gain.value = newMode ? -1 : 1;
+    if (audioCtx.current && stemFilters.current['vocal']) {
+      const ctx = audioCtx.current;
+      const nodes = stemFilters.current['vocal'];
+      const targetGain = newMode ? 0 : (stemsFX['vocal'].volume / 100);
+      const killGain = newMode ? -40 : 0;
+      nodes.gain.gain.setTargetAtTime(targetGain, ctx.currentTime, 0.2);
+      nodes.kill.gain.setTargetAtTime(killGain, ctx.currentTime, 0.2);
     }
   };
 
@@ -315,7 +247,7 @@ const StemStudio: React.FC = () => {
             </div>
           </div>
           <h2 className="text-3xl font-black italic tracking-tighter mb-2 uppercase drop-shadow-glow">V-STUDIO 7C</h2>
-          <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.5em] mb-8 opacity-60 italic">Precision Neural Audio Engine</p>
+          <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.5em] mb-8 opacity-60 italic">Precision Regional Mix v4.0</p>
           <label className="group relative w-20 h-20 bg-amber-600 text-white rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(245,158,11,0.3)] cursor-pointer hover:scale-110 active:scale-95 transition-all">
             <Plus className="w-10 h-10" />
             <input type="file" className="hidden" accept="audio/*" onChange={handleFileChange} />
@@ -329,14 +261,13 @@ const StemStudio: React.FC = () => {
              <div className="w-32 h-32 border-[4px] border-amber-500/5 border-t-amber-500 rounded-full animate-spin" />
              <Zap className="absolute inset-0 m-auto w-10 h-10 text-amber-500 animate-pulse" />
           </div>
-          <h3 className="text-amber-500 text-xl font-black italic tracking-tight uppercase animate-pulse">Extraindo 7C Bordões...</h3>
+          <h3 className="text-amber-500 text-xl font-black italic tracking-tight uppercase animate-pulse">Analizando Bordões...</h3>
         </div>
       )}
 
       {file && !isProcessing && (
         <div className="flex-1 flex flex-col animate-in fade-in zoom-in-95 duration-700">
           
-          {/* Header & Waveform */}
           <div className="p-6 bg-black/60 backdrop-blur-3xl border-b border-white/5 space-y-6 z-20">
             <div className="flex items-center justify-between">
               <button onClick={() => setFile(null)} className="p-3 bg-white/5 rounded-2xl text-zinc-500 hover:text-white transition-all"><SkipBack className="w-5 h-5" /></button>
@@ -368,95 +299,77 @@ const StemStudio: React.FC = () => {
             </div>
           </div>
 
-          {/* Controller Tabs */}
-          <div className="flex bg-zinc-950/40 p-1 mx-6 mt-4 rounded-2xl border border-white/5">
-             {[
-               { id: 'stems', label: 'Canais', icon: Layers },
-               { id: 'fx', label: 'Estúdio FX', icon: Wand2 },
-               { id: 'eq', label: 'Equalizador', icon: Sliders }
-             ].map(tab => (
-               <button
-                 key={tab.id}
-                 onClick={() => setShowConsole(tab.id as any)}
-                 className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest ${showConsole === tab.id ? 'bg-amber-600 text-white shadow-glow' : 'text-zinc-600 hover:text-zinc-400'}`}
-               >
-                 <tab.icon className="w-4 h-4" />
-                 {tab.label}
-               </button>
-             ))}
-          </div>
+          <div className="flex-1 p-6 overflow-y-auto bg-[#08080a] pb-24 space-y-4">
+            {STEM_CONFIGS.map((stem) => {
+              const fx = stemsFX[stem.id];
+              const isExpanded = expandedStem === stem.id;
+              const isVocalMuted = stem.id === 'vocal' && (karaokeMode || fx.volume === 0 || fx.isMuted);
 
-          {/* Main Area */}
-          <div className="flex-1 p-6 overflow-y-auto bg-[#08080a] pb-24">
-            
-            {showConsole === 'stems' && (
-              <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
-                {stems.map((stem) => (
-                  <div key={stem.id} className={`p-4 rounded-[2rem] border transition-all duration-300 flex items-center gap-5 ${stem.id === 'vocal' && (karaokeMode || stem.level === 0) ? 'bg-red-600/10 border-red-500/20 opacity-60' : 'bg-zinc-900/40 border-white/5 shadow-2xl backdrop-blur-md'}`}>
-                    <div className={`w-14 h-14 rounded-2xl bg-black border border-white/10 flex items-center justify-center ${stem.id === 'vocal' && (karaokeMode || stem.level === 0) ? 'text-red-500' : stem.color}`}>
+              return (
+                <div key={stem.id} className={`p-4 rounded-[2rem] border transition-all duration-300 flex flex-col gap-4 ${isVocalMuted ? 'bg-red-600/5 border-red-500/20 opacity-60' : 'bg-zinc-900/40 border-white/5 shadow-2xl backdrop-blur-md'}`}>
+                  <div className="flex items-center gap-5">
+                    <div className={`w-14 h-14 rounded-2xl bg-black border border-white/10 flex items-center justify-center transition-all ${isVocalMuted ? 'text-red-500' : stem.color}`}>
                        <stem.icon className="w-6 h-6" />
                     </div>
                     <div className="flex-1 flex flex-col gap-2">
                       <div className="flex justify-between items-center px-2">
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${stem.id === 'guitar7c' ? 'text-amber-500 shadow-glow text-lg' : 'text-zinc-400'}`}>{stem.name}</span>
-                        <span className="text-[10px] font-mono font-black text-amber-500/40">{stem.level}%</span>
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${stem.id === 'guitar7c' ? 'text-amber-500 shadow-glow' : 'text-zinc-400'}`}>{stem.name}</span>
+                        <span className="text-[10px] font-mono font-black text-amber-500/40">{fx.volume}%</span>
                       </div>
                       <div className="flex items-center gap-4">
-                        <button onClick={() => updateStemLevel(stem.id, -5)} className="p-2 rounded-xl bg-black hover:bg-zinc-800 transition-colors"><Minus className="w-4 h-4" /></button>
+                        <button onClick={() => updateFX(stem.id, 'volume', Math.max(0, fx.volume - 5))} className="p-2 rounded-xl bg-black hover:bg-zinc-800 transition-colors"><Minus className="w-4 h-4" /></button>
                         <div className="flex-1 h-2 bg-black rounded-full p-0.5 border border-white/5">
-                          <div className={`h-full rounded-full transition-all duration-300 ${stem.color.replace('text', 'bg')} shadow-glow`} style={{ width: `${stem.level}%` }} />
+                          <div className={`h-full rounded-full transition-all duration-300 ${stem.color.replace('text', 'bg')} shadow-glow`} style={{ width: `${fx.volume}%` }} />
                         </div>
-                        <button onClick={() => updateStemLevel(stem.id, 5)} className="p-2 rounded-xl bg-black hover:bg-zinc-800 transition-colors"><Plus className="w-4 h-4" /></button>
+                        <button onClick={() => updateFX(stem.id, 'volume', Math.min(100, fx.volume + 5))} className="p-2 rounded-xl bg-black hover:bg-zinc-800 transition-colors"><Plus className="w-4 h-4" /></button>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {showConsole === 'fx' && (
-              <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
-                <div className="bg-zinc-900/40 p-6 rounded-[2rem] border border-white/5">
-                   <h4 className="text-[11px] font-black uppercase tracking-widest text-zinc-500 mb-6 flex items-center gap-2">
-                      <Speaker className="w-4 h-4" /> Balanço & Panorâmica
-                   </h4>
-                   <div className="flex items-center gap-4">
-                      <span className="text-xs font-black text-zinc-700">L</span>
-                      <input type="range" min="-1" max="1" step="0.01" value={balance} onChange={(e) => setBalance(parseFloat(e.target.value))} className="flex-1 h-1.5 bg-black rounded-full appearance-none accent-amber-500" />
-                      <span className="text-xs font-black text-zinc-700">R</span>
-                   </div>
-                </div>
-                <div className="bg-zinc-900/40 p-6 rounded-[2rem] border border-white/5">
-                   <h4 className="text-[11px] font-black uppercase tracking-widest text-zinc-500 mb-6 flex items-center gap-2">
-                      <Zap className="w-4 h-4" /> Distorção de Harmonia
-                   </h4>
-                   <input type="range" min="0" max="100" value={distortion} onChange={(e) => setDistortion(parseInt(e.target.value))} className="w-full h-1.5 bg-black rounded-full appearance-none accent-red-600" />
-                </div>
-              </div>
-            )}
-
-            {showConsole === 'eq' && (
-              <div className="grid grid-cols-3 gap-6 animate-in zoom-in-95 duration-500">
-                {[
-                  { label: 'GRAVE', val: bass, set: setBass, color: 'text-amber-500' },
-                  { label: 'MÉDIO', val: mid, set: setMid, color: 'text-indigo-400' },
-                  { label: 'AGUDO', val: treble, set: setTreble, color: 'text-emerald-400' }
-                ].map(band => (
-                  <div key={band.label} className="flex flex-col items-center gap-4 bg-zinc-900/40 p-6 rounded-[2.5rem] border border-white/5">
-                    <button onClick={() => band.set(Math.min(20, band.val + 1))} className="p-3 bg-black hover:bg-zinc-800 rounded-xl transition-colors"><ChevronUp className="w-5 h-5" /></button>
-                    <div className="h-48 w-2 bg-black rounded-full relative overflow-hidden">
-                       <div className={`absolute bottom-0 left-0 right-0 ${band.color.replace('text', 'bg')} rounded-full transition-all duration-300 shadow-glow`} style={{ height: `${((band.val + 20) / 40) * 100}%` }} />
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => updateFX(stem.id, 'isMuted', !fx.isMuted)}
+                        className={`w-12 h-12 rounded-xl flex items-center justify-center border transition-all ${fx.isMuted ? 'bg-red-600 border-red-500 text-white' : 'bg-white/5 text-zinc-700 border-white/10'}`}
+                      >
+                        <VolumeX className="w-5 h-5" />
+                      </button>
+                      <button 
+                        onClick={() => setExpandedStem(isExpanded ? null : stem.id)}
+                        className={`w-12 h-12 rounded-xl flex items-center justify-center border transition-all ${isExpanded ? 'bg-amber-600 text-white shadow-glow' : 'bg-white/5 text-zinc-700 border-white/10'}`}
+                      >
+                        <Settings2 className="w-5 h-5" />
+                      </button>
                     </div>
-                    <button onClick={() => band.set(Math.max(-20, band.val - 1))} className="p-3 bg-black hover:bg-zinc-800 rounded-xl transition-colors"><ChevronDown className="w-5 h-5" /></button>
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${band.color}`}>{band.label}</span>
                   </div>
-                ))}
-              </div>
-            )}
 
+                  {isExpanded && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-black/60 rounded-3xl animate-in slide-in-from-top-4 duration-300 border border-white/5">
+                        {/* EQ Controls */}
+                        {[
+                          { label: 'Grave', key: 'bass' as keyof StemFX, min: -15, max: 15 },
+                          { label: 'Médio', key: 'mid' as keyof StemFX, min: -15, max: 15 },
+                          { label: 'Agudo', key: 'treble' as keyof StemFX, min: -15, max: 15 },
+                          { label: 'Balanço', key: 'balance' as keyof StemFX, min: -1, max: 1, step: 0.1 },
+                        ].map(control => (
+                          <div key={control.label} className="flex flex-col gap-2">
+                            <div className="flex justify-between px-1">
+                                <span className="text-[8px] font-black uppercase text-zinc-600">{control.label}</span>
+                                <span className="text-[8px] font-mono text-amber-500">{(fx[control.key] as number).toFixed(control.key === 'balance' ? 1 : 0)}</span>
+                            </div>
+                            <input 
+                              type="range" 
+                              min={control.min} max={control.max} step={control.step || 1} 
+                              value={fx[control.key] as number}
+                              onChange={(e) => updateFX(stem.id, control.key, parseFloat(e.target.value))}
+                              className="w-full h-1 bg-zinc-800 rounded-full appearance-none accent-amber-600"
+                            />
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
-          {/* Footer Controls */}
           <div className="p-8 pb-12 bg-[#0c0c0e]/95 backdrop-blur-3xl border-t border-white/5 flex flex-col gap-8 shadow-3xl z-30">
             <div className="flex items-center justify-around gap-8 max-w-2xl mx-auto w-full">
                <button onClick={toggleKaraoke} className={`p-6 rounded-[2rem] border transition-all active:scale-90 relative group ${karaokeMode ? 'bg-red-600 border-red-500 text-white shadow-glow' : 'bg-white/5 border-white/10 text-zinc-700 hover:text-white'}`}>
@@ -469,11 +382,11 @@ const StemStudio: React.FC = () => {
                </button>
 
                <div className="flex flex-col gap-2">
-                  <span className="text-[8px] font-black text-zinc-700 uppercase tracking-widest text-center">Volume Master</span>
+                  <span className="text-[8px] font-black text-zinc-700 uppercase tracking-widest text-center italic">Time-Stretch (BPM)</span>
                   <div className="flex items-center gap-4 bg-black p-3 rounded-3xl border border-white/10">
-                    <button onClick={() => setMasterVolume(prev => Math.max(0, prev - 5))} className="text-white"><Minus className="w-4 h-4" /></button>
-                    <span className="text-sm font-mono font-black text-white w-8 text-center">{masterVolume}%</span>
-                    <button onClick={() => setMasterVolume(prev => Math.min(100, prev + 5))} className="text-white"><Plus className="w-4 h-4" /></button>
+                    <button onClick={() => setPlaybackSpeed(prev => Math.max(0.5, prev - 0.1))} className="text-white"><Minus className="w-4 h-4" /></button>
+                    <span className="text-sm font-mono font-black text-amber-500 w-8 text-center">{Math.round(playbackSpeed * 100)}%</span>
+                    <button onClick={() => setPlaybackSpeed(prev => Math.min(2.0, prev + 0.1))} className="text-white"><Plus className="w-4 h-4" /></button>
                   </div>
                </div>
             </div>
