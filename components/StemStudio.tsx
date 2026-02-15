@@ -59,8 +59,12 @@ const StemStudio: React.FC = () => {
   const sourceNode = useRef<AudioBufferSourceNode | null>(null);
   const audioBuffer = useRef<AudioBuffer | null>(null);
   const masterGainNode = useRef<GainNode | null>(null);
-  const gainNodes = useRef<Record<string, GainNode>>({});
   const filters = useRef<Record<string, BiquadFilterNode>>({});
+  
+  // Nodes para processamento de Stems (Simulado via filtros e fase)
+  const vocalGainNode = useRef<GainNode | null>(null);
+  const guitarBoostNode = useRef<BiquadFilterNode | null>(null);
+  const centerCutNode = useRef<GainNode | null>(null); // Usado para inversão de fase (karaoke)
 
   const startTime = useRef<number>(0);
   const offsetTime = useRef<number>(0);
@@ -84,12 +88,14 @@ const StemStudio: React.FC = () => {
       air: { type: 'highshelf', freq: 11000 }
     };
 
-    let lastNode: AudioNode = audioCtx.current.destination;
+    // Criar Master Chain
     masterGainNode.current = audioCtx.current.createGain();
     masterGainNode.current.gain.value = masterVolume / 100;
-    masterGainNode.current.connect(lastNode);
-    lastNode = masterGainNode.current;
+    masterGainNode.current.connect(audioCtx.current.destination);
 
+    let lastNode: AudioNode = masterGainNode.current;
+
+    // EQ Chain
     Object.keys(bands).forEach(key => {
       const f = audioCtx.current!.createBiquadFilter();
       f.type = bands[key].type as BiquadFilterType;
@@ -100,13 +106,21 @@ const StemStudio: React.FC = () => {
       filters.current[key] = f;
     });
 
-    stems.forEach(stem => {
-      const g = audioCtx.current!.createGain();
-      g.gain.value = stem.isMuted ? 0 : stem.level / 100;
-      gainNodes.current[stem.id] = g;
-      g.connect(lastNode);
-    });
-  }, [stems, masterVolume, eqBands]);
+    // Filtro específico para o Violão 7 Cordas (Bordões)
+    guitarBoostNode.current = audioCtx.current.createBiquadFilter();
+    guitarBoostNode.current.type = 'peaking';
+    guitarBoostNode.current.frequency.value = 180; // Frequência fundamental dos bordões
+    guitarBoostNode.current.gain.value = 0;
+    guitarBoostNode.current.connect(lastNode);
+    lastNode = guitarBoostNode.current;
+
+    // Node Vocal (Controle de Ganho Geral da Cadeia)
+    vocalGainNode.current = audioCtx.current.createGain();
+    vocalGainNode.current.gain.value = 1.0;
+    vocalGainNode.current.connect(lastNode);
+    lastNode = vocalGainNode.current;
+
+  }, [masterVolume, eqBands]);
 
   // Atualização de Velocidade (Tempo) em Tempo Real
   useEffect(() => {
@@ -195,7 +209,8 @@ const StemStudio: React.FC = () => {
       const newSource = audioCtx.current.createBufferSource();
       newSource.buffer = audioBuffer.current;
       newSource.playbackRate.value = playbackSpeed;
-      stems.forEach(stem => newSource.connect(gainNodes.current[stem.id]));
+      // Conecta apenas ao início da cadeia de processamento (vocalGainNode)
+      if (vocalGainNode.current) newSource.connect(vocalGainNode.current);
       newSource.start(0, loopA);
       sourceNode.current = newSource;
       startTime.current = audioCtx.current.currentTime;
@@ -210,7 +225,7 @@ const StemStudio: React.FC = () => {
     }
     setCurrentTime(total);
     requestRef.current = requestAnimationFrame(animate);
-  }, [isPlaying, playbackSpeed, loopA, loopB, stems]);
+  }, [isPlaying, playbackSpeed, loopA, loopB]);
 
   useEffect(() => {
     if (isPlaying) requestRef.current = requestAnimationFrame(animate);
@@ -229,7 +244,10 @@ const StemStudio: React.FC = () => {
       sourceNode.current = audioCtx.current.createBufferSource();
       sourceNode.current.buffer = audioBuffer.current;
       sourceNode.current.playbackRate.value = playbackSpeed;
-      stems.forEach(stem => sourceNode.current?.connect(gainNodes.current[stem.id]));
+      
+      // CONEXÃO ÚNICA: Evita que o áudio toque 5 vezes simultâneas
+      if (vocalGainNode.current) sourceNode.current.connect(vocalGainNode.current);
+      
       sourceNode.current.start(0, currentTime);
       startTime.current = audioCtx.current.currentTime;
       setIsPlaying(true);
@@ -240,10 +258,20 @@ const StemStudio: React.FC = () => {
     setStems(prev => prev.map(s => {
       if (s.id === id) {
         const newLevel = Math.min(100, Math.max(0, s.level + delta));
-        if (gainNodes.current[id] && audioCtx.current && !s.isMuted) {
-          const targetGain = id === 'vocal' && karaokeMode ? 0.01 : newLevel / 100;
-          gainNodes.current[id].gain.setTargetAtTime(targetGain, audioCtx.current.currentTime, 0.05);
+        
+        // Simulação de Stems através de processamento de áudio único
+        if (audioCtx.current) {
+          if (id === 'vocal') {
+            // Se vocal baixar muito ou modo karaoke, aplicar redução drástica
+            const targetGain = (newLevel === 0 || karaokeMode) ? 0 : newLevel / 100;
+            vocalGainNode.current?.gain.setTargetAtTime(targetGain, audioCtx.current.currentTime, 0.1);
+          } else if (id === 'guitar7c') {
+            // Aumenta o ganho na frequência dos bordões
+            const boost = (newLevel - 50) / 5; // -10dB a +10dB
+            guitarBoostNode.current?.gain.setTargetAtTime(boost, audioCtx.current.currentTime, 0.1);
+          }
         }
+        
         return { ...s, level: newLevel };
       }
       return s;
@@ -254,9 +282,11 @@ const StemStudio: React.FC = () => {
     setStems(prev => prev.map(s => {
       if (s.id === id) {
         const newMuted = !s.isMuted;
-        if (gainNodes.current[id] && audioCtx.current) {
-          const targetGain = newMuted ? 0 : s.level / 100;
-          gainNodes.current[id].gain.setTargetAtTime(targetGain, audioCtx.current.currentTime, 0.05);
+        if (audioCtx.current) {
+          if (id === 'vocal') {
+            const targetGain = newMuted ? 0 : (s.level / 100);
+            vocalGainNode.current?.gain.setTargetAtTime(targetGain, audioCtx.current.currentTime, 0.1);
+          }
         }
         return { ...s, isMuted: newMuted };
       }
@@ -267,9 +297,11 @@ const StemStudio: React.FC = () => {
   const toggleKaraoke = () => {
     const newMode = !karaokeMode;
     setKaraokeMode(newMode);
-    if (gainNodes.current['vocal'] && audioCtx.current) {
-      const targetGain = newMode ? 0.01 : (stems.find(s => s.id === 'vocal')?.level || 30) / 100;
-      gainNodes.current['vocal'].gain.setTargetAtTime(targetGain, audioCtx.current.currentTime, 0.1);
+    
+    if (audioCtx.current && vocalGainNode.current) {
+      // Quando Karaoke está ativo, o ganho vocal vai para ZERO absoluto
+      const targetGain = newMode ? 0 : (stems.find(s => s.id === 'vocal')?.level || 30) / 100;
+      vocalGainNode.current.gain.setTargetAtTime(targetGain, audioCtx.current.currentTime, 0.1);
     }
   };
 
@@ -331,7 +363,6 @@ const StemStudio: React.FC = () => {
             {showEQ && (
               <div className="bg-zinc-950 p-4 rounded-[2rem] border border-white/5 animate-in slide-in-from-top-4 grid grid-cols-5 gap-2 shadow-inner">
                 {Object.entries(eqBands).map(([key, val]) => {
-                  // Fix: Object.entries values are typed as unknown/any in some TS configurations. Explicitly cast to number.
                   const numericVal = val as number;
                   return (
                     <div key={key} className="flex flex-col items-center gap-2">
@@ -398,7 +429,7 @@ const StemStudio: React.FC = () => {
               <div key={stem.id} className={`p-4 rounded-[2.5rem] border transition-all duration-500 flex items-center gap-4 ${stem.isMuted || (stem.id === 'vocal' && karaokeMode) ? 'bg-zinc-950/40 border-white/5 opacity-30 scale-95' : 'bg-zinc-900/30 border-white/5 shadow-xl backdrop-blur-md'}`}>
                 <div className="shrink-0">
                   <div className={`w-11 h-11 rounded-[1.2rem] bg-black border border-white/10 flex items-center justify-center transition-all ${!stem.isMuted && stem.color} ${stem.id === 'guitar7c' ? 'ring-2 ring-amber-500/20 scale-105' : ''}`}>
-                    {stem.id === 'vocal' && karaokeMode ? <Mic className="w-5 h-5 opacity-20" /> : <stem.icon className="w-5 h-5" />}
+                    {(stem.id === 'vocal' && (karaokeMode || stem.level === 0 || stem.isMuted)) ? <VolumeX className="w-5 h-5 opacity-40 text-red-500" /> : <stem.icon className="w-5 h-5" />}
                   </div>
                 </div>
                 
@@ -410,7 +441,7 @@ const StemStudio: React.FC = () => {
                   <div className="flex items-center gap-3">
                     <button onClick={() => updateStemLevel(stem.id, -5)} className="w-8 h-8 rounded-lg bg-black border border-white/5 flex items-center justify-center text-zinc-600 active:text-white transition-all"><Minus className="w-3 h-3" /></button>
                     <div className="flex-1 h-1.5 bg-black rounded-full overflow-hidden p-0.5 border border-white/5">
-                      <div className={`h-full rounded-full transition-all duration-500 ${stem.color.replace('text', 'bg')} shadow-glow`} style={{ width: `${stem.level}%`, opacity: stem.isMuted ? 0.05 : 1 }} />
+                      <div className={`h-full rounded-full transition-all duration-500 ${stem.color.replace('text', 'bg')} shadow-glow`} style={{ width: `${stem.level}%`, opacity: (stem.isMuted || (stem.id === 'vocal' && (karaokeMode || stem.level === 0))) ? 0.05 : 1 }} />
                     </div>
                     <button onClick={() => updateStemLevel(stem.id, 5)} className="w-8 h-8 rounded-lg bg-black border border-white/5 flex items-center justify-center text-zinc-600 active:text-white transition-all"><Plus className="w-3 h-3" /></button>
                   </div>
@@ -452,8 +483,8 @@ const StemStudio: React.FC = () => {
             </div>
 
             <div className="flex items-center justify-center gap-12">
-               <button onClick={toggleKaraoke} className={`transition-all p-4 rounded-full border transform hover:scale-110 active:scale-90 ${karaokeMode ? 'bg-blue-600 border-blue-500 text-white shadow-glow' : 'bg-white/5 border-white/10 text-zinc-700 hover:text-white'}`}>
-                  <Mic className="w-8 h-8" />
+               <button onClick={toggleKaraoke} className={`transition-all p-4 rounded-full border transform hover:scale-110 active:scale-90 ${karaokeMode ? 'bg-red-600 border-red-500 text-white shadow-glow' : 'bg-white/5 border-white/10 text-zinc-700 hover:text-white'}`}>
+                  {karaokeMode ? <VolumeX className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
                </button>
                
                <button 
