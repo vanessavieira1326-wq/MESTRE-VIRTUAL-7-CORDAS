@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { 
   Mic2, Music2, Drum, Guitar, 
@@ -331,19 +330,23 @@ const StemStudio: React.FC = () => {
 
             {showEQ && (
               <div className="bg-zinc-950 p-4 rounded-[2rem] border border-white/5 animate-in slide-in-from-top-4 grid grid-cols-5 gap-2 shadow-inner">
-                {Object.entries(eqBands).map(([key, val]) => (
-                  <div key={key} className="flex flex-col items-center gap-2">
-                    <button onClick={() => setEqBands(prev => ({ ...prev, [key]: Math.min(18, (prev as any)[key] + 2) }))} className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center text-zinc-500 active:bg-amber-600 transition-all"><ChevronUp className="w-4 h-4" /></button>
-                    <div className="h-16 w-1 bg-white/5 rounded-full relative overflow-hidden">
-                      <div className="absolute bottom-0 left-0 right-0 bg-amber-500 rounded-full transition-all duration-300 shadow-glow" style={{ height: `${((val + 18) / 36) * 100}%` }} />
+                {Object.entries(eqBands).map(([key, val]) => {
+                  // Fix: Object.entries values are typed as unknown/any in some TS configurations. Explicitly cast to number.
+                  const numericVal = val as number;
+                  return (
+                    <div key={key} className="flex flex-col items-center gap-2">
+                      <button onClick={() => setEqBands(prev => ({ ...prev, [key]: Math.min(18, (prev as any)[key] + 2) }))} className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center text-zinc-500 active:bg-amber-600 transition-all"><ChevronUp className="w-4 h-4" /></button>
+                      <div className="h-16 w-1 bg-white/5 rounded-full relative overflow-hidden">
+                        <div className="absolute bottom-0 left-0 right-0 bg-amber-500 rounded-full transition-all duration-300 shadow-glow" style={{ height: `${((numericVal + 18) / 36) * 100}%` }} />
+                      </div>
+                      <button onClick={() => setEqBands(prev => ({ ...prev, [key]: Math.max(-18, (prev as any)[key] - 2) }))} className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center text-zinc-500 active:bg-red-600 transition-all"><ChevronDown className="w-4 h-4" /></button>
+                      <div className="flex flex-col items-center gap-0.5">
+                         <span className="text-[6px] font-black uppercase text-zinc-700 tracking-[0.2em]">{key}</span>
+                         <span className={`text-[8px] font-mono font-black ${numericVal > 0 ? 'text-amber-500' : 'text-zinc-600'}`}>{numericVal > 0 ? '+' : ''}{numericVal}</span>
+                      </div>
                     </div>
-                    <button onClick={() => setEqBands(prev => ({ ...prev, [key]: Math.max(-18, (prev as any)[key] - 2) }))} className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center text-zinc-500 active:bg-red-600 transition-all"><ChevronDown className="w-4 h-4" /></button>
-                    <div className="flex flex-col items-center gap-0.5">
-                       <span className="text-[6px] font-black uppercase text-zinc-700 tracking-[0.2em]">{key}</span>
-                       <span className={`text-[8px] font-mono font-black ${val > 0 ? 'text-amber-500' : 'text-zinc-600'}`}>{val > 0 ? '+' : ''}{val}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
