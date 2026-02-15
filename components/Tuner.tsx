@@ -244,7 +244,7 @@ const Tuner: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Activity className={`w-4 h-4 ${isAutoMode ? 'text-amber-500 animate-pulse' : 'text-slate-600'}`} />
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Digital Tuner Professional</h3>
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Afinador Profissional 7C</h3>
           </div>
           
           <div className="flex items-center gap-2">

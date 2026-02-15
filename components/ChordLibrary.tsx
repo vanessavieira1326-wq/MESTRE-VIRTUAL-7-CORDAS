@@ -1,7 +1,16 @@
 
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { Search, Play, Volume2, GraduationCap, Music, Info, Filter } from 'lucide-react';
-import { ChordShape } from '../services/geminiService';
+
+/* Defined ChordShape locally as it is not exported from geminiService.
+   This resolves the "has no exported member 'ChordShape'" and property access errors on 'name' and 'frets'. */
+export interface ChordShape {
+  name: string;
+  type: string;
+  tab: string;
+  description: string;
+  frets: number[];
+}
 
 // Frequências para Violão de 7 Cordas (Afinação em B: B1=61.74, E2=82.41, A2=110.00, D3=146.83, G3=196.00, B3=246.94, E4=329.63)
 const GUITAR_FREQS = [61.74, 82.41, 110.00, 146.83, 196.00, 246.94, 329.63];
