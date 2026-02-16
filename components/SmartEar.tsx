@@ -34,6 +34,7 @@ const SmartEar: React.FC = () => {
     osc.frequency.setValueAtTime(freq, startTime);
     sub.frequency.setValueAtTime(freq, startTime);
 
+    // Filtro para simular violão de nylon
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(1200, startTime);
     filter.frequency.exponentialRampToValueAtTime(150, startTime + duration);
@@ -53,30 +54,45 @@ const SmartEar: React.FC = () => {
     sub.stop(startTime + duration);
   };
 
-  const playSequence = (scoreStr: string, id: string) => {
+  const playSequence = async (scoreStr: string, id: string) => {
     if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     const ctx = audioCtxRef.current;
-    if (ctx.state === 'suspended') ctx.resume();
+    
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
 
     setPlayingId(id);
+    // Limpeza da string de notas
     const notes = scoreStr.split(',').map(n => n.trim()).filter(n => n.length > 0);
     let startTimeOffset = 0.1;
 
     notes.forEach((noteStr, index) => {
-      // Regex aprimorada para Notas (A-G), Acidentes (# ou b) e Oitavas (0-4)
-      const match = noteStr.match(/([A-G][#b]?)([0-4])/i);
+      // Regex aprimorada para capturar Notas, Acidentes e Oitavas (expandido para 0-8)
+      const match = noteStr.match(/([A-G][#b]?)([0-8])/i);
+      
       if (match) {
-        const [_, note, octave] = match;
-        const noteKey = note.toUpperCase();
-        const semitones = NOTE_MAP[noteKey] + (parseInt(octave) + 1) * 12;
-        const freq = 440 * Math.pow(2, (semitones - 69) / 12);
+        const [_, noteName, octaveStr] = match;
         
-        const playTime = ctx.currentTime + startTimeOffset;
-        playNote(ctx, freq, playTime, 0.5);
+        // Normalização correta: "Bb" -> "Bb", "C#" -> "C#", "c#" -> "C#"
+        const noteKey = noteName.charAt(0).toUpperCase() + noteName.slice(1).toLowerCase();
         
-        // Sincronização visual
-        setTimeout(() => setCurrentNoteIndex(index), startTimeOffset * 1000);
-        startTimeOffset += 0.45; // Intervalo entre notas
+        if (NOTE_MAP.hasOwnProperty(noteKey)) {
+          const octave = parseInt(octaveStr);
+          const semitones = NOTE_MAP[noteKey] + (octave + 1) * 12;
+          const freq = 440 * Math.pow(2, (semitones - 69) / 12);
+          
+          const playTime = ctx.currentTime + startTimeOffset;
+          playNote(ctx, freq, playTime, 0.5);
+          
+          // Sincronização visual
+          setTimeout(() => setCurrentNoteIndex(index), startTimeOffset * 1000);
+          startTimeOffset += 0.45; // Intervalo entre notas
+        } else {
+          console.warn(`Nota não encontrada no mapa: ${noteKey} (Original: ${noteStr})`);
+        }
+      } else {
+         console.warn(`Formato de nota inválido: ${noteStr}`);
       }
     });
 
