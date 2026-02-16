@@ -259,21 +259,8 @@ const App: React.FC = () => {
           </p>
         </section>
 
-        <footer className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 py-4 md:py-6 border-t border-white/5 mt-auto">
-          {[
-            { icon: ShieldCheck, title: "Precision", desc: "Separação neural de canais regional." },
-            { icon: Star, title: "Luthieria", desc: "Análise ultra-fina de baixarias 7C." },
-            { icon: Zap, title: "IA Neural", desc: "Sincronização Ativa Ativada." }
-          ].map((item, idx) => (
-            <div key={idx} className="flex items-center gap-3 p-3 md:p-4 bg-black/20 rounded-2xl border border-white/5 group">
-              <item.icon className="w-4 h-4 md:w-5 md:h-5 text-amber-500 shrink-0 group-hover:scale-110 transition-transform" />
-              <div>
-                <h4 className="font-bold text-slate-100 text-[9px] md:text-[10px] uppercase tracking-wider">{item.title}</h4>
-                <p className="text-[8px] md:text-[9px] text-slate-500">{item.desc}</p>
-              </div>
-            </div>
-          ))}
-        </footer>
+        {/* Removed the footer section as per user request */}
+
       </main>
     </div>
   );
