@@ -8,8 +8,8 @@ import ChordLibrary from './components/ChordLibrary';
 import RhythmLibrary from './components/RhythmLibrary';
 import GroupSimulator from './components/GroupSimulator';
 import { 
-  ShieldCheck, Music2, Star, Zap, Music, Library, Radio, Settings2, Users, Drum, // Existing
-  Search, ArrowLeft, Clock, Activity, Lightbulb, AudioLines // New icons for components
+  ShieldCheck, Music2, Star, Zap, Music, Library, Radio, Settings2, Users, Drum, 
+  Search, ArrowLeft, Clock, Activity, Lightbulb, AudioLines 
 } from 'lucide-react';
 
 const musicalNotationFragments = [
@@ -131,7 +131,7 @@ const ALL_COMPONENTS: AppTool[] = [
 const App: React.FC = () => {
   const [description, setDescription] = useState("");
   const [hasKey, setHasKey] = useState<boolean>(true);
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  // Removed searchTerm state as per user request
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -154,15 +154,8 @@ const App: React.FC = () => {
     }
   };
 
-  const filteredComponents = useMemo(() => {
-    if (!searchTerm) return ALL_COMPONENTS;
-    const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    return ALL_COMPONENTS.filter(tool => 
-      tool.name.toLowerCase().includes(lowerCaseSearchTerm) ||
-      tool.description.toLowerCase().includes(lowerCaseSearchTerm) ||
-      tool.keywords.some(keyword => keyword.toLowerCase().includes(lowerCaseSearchTerm))
-    );
-  }, [searchTerm]);
+  // Simplified filteredComponents as there's no search bar
+  const filteredComponents = useMemo(() => ALL_COMPONENTS, []);
 
   const SelectedComponent = useMemo(() => {
     return ALL_COMPONENTS.find(tool => tool.id === selectedComponentId)?.component;
@@ -170,7 +163,7 @@ const App: React.FC = () => {
 
   const handleBackToSearch = useCallback(() => {
     setSelectedComponentId(null);
-    setSearchTerm(''); // Clear search term when going back to show all components
+    // Removed setSearchTerm('') as per user request (no search bar)
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
@@ -226,48 +219,36 @@ const App: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="relative group mb-6">
-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600 group-focus-within:text-amber-500 transition-colors" />
-              <input 
-                type="text"
-                placeholder="Pesquisar ferramentas (ex: metrônomo, baixaria, afinar)..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-zinc-900/80 border border-white/10 rounded-3xl py-5 pl-14 pr-6 text-sm text-white focus:ring-2 focus:ring-amber-600/40 outline-none transition-all placeholder:text-slate-600"
-              />
-            </div>
+            {/* Removed the search bar as per user request */}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
               {filteredComponents.map((tool) => (
                 <button
                   key={tool.id}
                   onClick={() => setSelectedComponentId(tool.id)}
-                  className="group bg-slate-900 border border-slate-800 p-6 rounded-3xl hover:border-amber-600/50 transition-all cursor-pointer relative overflow-hidden text-left flex flex-col gap-3 h-full animate-in fade-in slide-in-from-bottom-2"
+                  // Adjusted padding, removed h-full, adjusted border color and hover
+                  className="group bg-slate-900 border border-amber-500/50 p-5 rounded-3xl hover:border-amber-500 transition-all cursor-pointer relative overflow-hidden text-left flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2"
                 >
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                     <tool.icon className="w-16 h-16 text-amber-500/20" />
                   </div>
                   
                   <div className="relative z-10">
-                    <div className="p-3 bg-amber-600/20 rounded-xl inline-flex mb-3">
+                    {/* Adjusted mb for icon container */}
+                    <div className="p-3 bg-amber-600/20 rounded-xl inline-flex mb-2"> 
                       <tool.icon className="w-6 h-6 text-amber-500" />
                     </div>
-                    <h3 className="text-xl font-bold text-slate-100 mb-2 group-hover:text-amber-500 transition-colors">
+                    {/* Changed tool name color to amber-500 */}
+                    <h3 className="text-xl font-bold text-amber-500 mb-2 transition-colors">
                       {tool.name}
                     </h3>
-                    <p className="text-sm text-slate-400 line-clamp-2">
+                    {/* Changed description color to white */}
+                    <p className="text-sm text-white line-clamp-2"> 
                       {tool.description}
                     </p>
                   </div>
                 </button>
               ))}
-
-              {filteredComponents.length === 0 && searchTerm && (
-                <div className="col-span-full py-24 text-center opacity-20">
-                  <Search className="w-16 h-16 mx-auto mb-4" />
-                  <p className="font-black uppercase tracking-widest text-xs">Nenhuma ferramenta encontrada para "{searchTerm}"</p>
-                </div>
-              )}
             </div>
           </>
         )}
