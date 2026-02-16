@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import AITeacher from './components/AITeacher';
 import Metronome from './components/Metronome';
@@ -6,7 +5,9 @@ import Tuner from './components/Tuner';
 import StemStudio from './components/StemStudio';
 import SmartEar from './components/SmartEar';
 import ChordLibrary from './components/ChordLibrary';
-import { ShieldCheck, Music2, Star, Zap, Music, Library, Radio, Settings2 } from 'lucide-react';
+import RhythmLibrary from './components/RhythmLibrary';
+import GroupSimulator from './components/GroupSimulator';
+import { ShieldCheck, Music2, Star, Zap, Music, Library, Radio, Settings2, Users } from 'lucide-react';
 
 const musicalNotationFragments = [
   "♩=120", "♫ ♬ ♭", "♯C7M(9)", "♭9/♯11", "|--7--5--|", "𝄞 𝄢", "A/G#", "D7(b9)", "G/B", "E7/D", "|--0-h-2--|", "p.i.m.a", "7ª Corda (C)", "|--x--|", "B7(13)", "Cm7(b5)"
@@ -50,12 +51,10 @@ const AppIcon: React.FC = () => (
 const App: React.FC = () => {
   const [description, setDescription] = useState("");
   const [hasKey, setHasKey] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'practice' | 'studio' | 'theory'>('practice');
+  const [activeTab, setActiveTab] = useState<'practice' | 'jam' | 'studio' | 'theory'>('practice');
 
   useEffect(() => {
-    // Força o scroll para o topo ao carregar o app para garantir início limpo
     window.scrollTo(0, 0);
-    
     setDescription(welcomeTexts[Math.floor(Math.random() * welcomeTexts.length)]);
     
     const checkKey = async () => {
@@ -65,8 +64,6 @@ const App: React.FC = () => {
       }
     };
     checkKey();
-
-    // Garantir que começamos sempre na prática, mesmo que houvesse alguma persistência anterior indesejada
     setActiveTab('practice');
   }, []);
 
@@ -116,6 +113,7 @@ const App: React.FC = () => {
         <div className="max-w-6xl mx-auto flex justify-around sm:justify-center sm:gap-8">
           {[
             { id: 'practice', label: 'Estudo', icon: Radio },
+            { id: 'jam', label: 'Roda Virtual', icon: Users },
             { id: 'studio', label: 'Estúdio', icon: Settings2 },
             { id: 'theory', label: 'Harmonia', icon: Library }
           ].map((tab) => (
@@ -151,11 +149,18 @@ const App: React.FC = () => {
             <div className="space-y-4 md:space-y-6 animate-in slide-in-from-left-4 duration-500">
               <Metronome />
               <Tuner />
+              <RhythmLibrary />
             </div>
             <div className="space-y-4 md:space-y-6 animate-in slide-in-from-right-4 duration-500">
               <SmartEar />
               <AITeacher />
             </div>
+          </div>
+        )}
+
+        {activeTab === 'jam' && (
+          <div className="lg:col-span-12 space-y-6 animate-in fade-in zoom-in-95 duration-300">
+            <GroupSimulator />
           </div>
         )}
 

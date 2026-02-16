@@ -113,7 +113,7 @@ const App: React.FC = () => {
         <div className="max-w-6xl mx-auto flex justify-around sm:justify-center sm:gap-8">
           {[
             { id: 'practice', label: 'Estudo', icon: Radio },
-            { id: 'jam', label: 'Roda', icon: Users },
+            { id: 'jam', label: 'Roda Virtual', icon: Users },
             { id: 'studio', label: 'Mixer', icon: Settings2 },
             { id: 'theory', label: 'Harmonia', icon: Library }
           ].map((tab) => (
