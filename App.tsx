@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import AITeacher from './components/AITeacher';
 import Metronome from './components/Metronome';
 import Tuner from './components/Tuner';
@@ -7,7 +7,10 @@ import SmartEar from './components/SmartEar';
 import ChordLibrary from './components/ChordLibrary';
 import RhythmLibrary from './components/RhythmLibrary';
 import GroupSimulator from './components/GroupSimulator';
-import { ShieldCheck, Music2, Star, Zap, Music, Library, Radio, Settings2, Users } from 'lucide-react';
+import { 
+  ShieldCheck, Music2, Star, Zap, Music, Library, Radio, Settings2, Users, Drum, // Existing
+  Search, ArrowLeft, Clock, Activity, Lightbulb, AudioLines // New icons for components
+} from 'lucide-react';
 
 const musicalNotationFragments = [
   "♩=120", "♫ ♬ ♭", "♯C7M(9)", "♭9/♯11", "|--7--5--|", "𝄞 𝄢", "A/G#", "D7(b9)", "G/B", "E7/D", "|--0-h-2--|", "p.i.m.a", "7ª Corda (C)", "|--x--|", "B7(13)", "Cm7(b5)"
@@ -48,10 +51,88 @@ const AppIcon: React.FC = () => (
   </div>
 );
 
+interface AppTool {
+  id: string;
+  name: string;
+  description: string;
+  icon: React.ElementType;
+  component: React.ComponentType;
+  keywords: string[];
+}
+
+const ALL_COMPONENTS: AppTool[] = [
+  { 
+    id: 'metronome', 
+    name: 'Metrônomo', 
+    description: 'Marque o tempo com precisão rítmica para o seu estudo.', 
+    icon: Clock, 
+    component: Metronome, 
+    keywords: ['metrônomo', 'tempo', 'ritmo', 'bpm', 'estudo'] 
+  },
+  { 
+    id: 'tuner', 
+    name: 'Afinador Profissional 7C', 
+    description: 'Afine seu violão de 7 cordas com alta precisão e tons de referência.', 
+    icon: Activity, 
+    component: Tuner, 
+    keywords: ['afinador', 'afinar', 'violão', '7 cordas', 'cordas', 'tuning'] 
+  },
+  { 
+    id: 'rhythm_library', 
+    name: 'Biblioteca de Levadas', 
+    description: 'Explore e pratique ritmos brasileiros de samba, choro e pagode.', 
+    icon: Drum, 
+    component: RhythmLibrary, 
+    keywords: ['levadas', 'ritmos', 'samba', 'choro', 'pagode', 'bossa nova', 'forró', 'prática'] 
+  },
+  { 
+    id: 'smart_ear', 
+    name: 'Dicas de Baixarias 7C', 
+    description: 'Crie ou transcreva baixarias com a inteligência artificial do Mestre.', 
+    icon: Lightbulb, 
+    component: SmartEar, 
+    keywords: ['baixarias', 'transcrição', 'criação', 'ai', 'partitura', 'ouvir'] 
+  },
+  { 
+    id: 'ai_teacher', 
+    name: 'Consultoria Técnica 7C', 
+    description: 'Tire suas dúvidas de harmonia e técnica com um Mestre AI.', 
+    icon: ShieldCheck, 
+    component: AITeacher, 
+    keywords: ['consultoria', 'professor', 'aula', 'harmonia', 'técnica', 'dúvidas', 'ai'] 
+  },
+  { 
+    id: 'group_simulator', 
+    name: 'Roda Virtual 7C', 
+    description: 'Simule uma roda de samba com percussão regional dinâmica e variada.', 
+    icon: Users, 
+    component: GroupSimulator, 
+    keywords: ['roda de samba', 'grupo', 'percussão', 'simulador', 'ensaiar', 'jam'] 
+  },
+  { 
+    id: 'stem_studio', 
+    name: 'V-STUDIO 7C', 
+    description: 'Mixe e controle os canais (stems) de suas músicas em tempo real.', 
+    icon: AudioLines, 
+    component: StemStudio, 
+    keywords: ['estúdio', 'mixer', 'stem', 'v-studio', 'produção', 'áudio'] 
+  },
+  { 
+    id: 'chord_library', 
+    name: 'Biblioteca Harmônica Master', 
+    description: 'Descubra voicings e acordes regionais para 7 cordas.', 
+    icon: Library, 
+    component: ChordLibrary, 
+    keywords: ['acordes', 'harmonia', 'biblioteca', 'voicing', 'cifras', 'teoria'] 
+  },
+];
+
+
 const App: React.FC = () => {
   const [description, setDescription] = useState("");
   const [hasKey, setHasKey] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'practice' | 'jam' | 'studio' | 'theory'>('practice');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -64,7 +145,6 @@ const App: React.FC = () => {
       }
     };
     checkKey();
-    setActiveTab('practice');
   }, []);
 
   const handleConnectKey = async () => {
@@ -73,6 +153,26 @@ const App: React.FC = () => {
       setHasKey(true);
     }
   };
+
+  const filteredComponents = useMemo(() => {
+    if (!searchTerm) return ALL_COMPONENTS;
+    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+    return ALL_COMPONENTS.filter(tool => 
+      tool.name.toLowerCase().includes(lowerCaseSearchTerm) ||
+      tool.description.toLowerCase().includes(lowerCaseSearchTerm) ||
+      tool.keywords.some(keyword => keyword.toLowerCase().includes(lowerCaseSearchTerm))
+    );
+  }, [searchTerm]);
+
+  const SelectedComponent = useMemo(() => {
+    return ALL_COMPONENTS.find(tool => tool.id === selectedComponentId)?.component;
+  }, [selectedComponentId]);
+
+  const handleBackToSearch = useCallback(() => {
+    setSelectedComponentId(null);
+    setSearchTerm(''); // Clear search term when going back to show all components
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#0c0604] text-slate-100 flex flex-col font-sans overflow-x-hidden selection:bg-amber-500/40 pb-safe">
@@ -109,65 +209,67 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <nav className="sticky top-[64px] md:top-[80px] z-40 w-full bg-[#0c0604]/80 backdrop-blur-md border-b border-white/5 py-1.5 md:py-2 px-4">
-        <div className="max-w-6xl mx-auto flex justify-around sm:justify-center sm:gap-8">
-          {[
-            { id: 'practice', label: 'Estudo', icon: Radio },
-            { id: 'jam', label: 'Roda Virtual', icon: Users },
-            { id: 'studio', label: 'Estúdio', icon: Settings2 },
-            { id: 'theory', label: 'Harmonia', icon: Library }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id as any);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`flex flex-col sm:flex-row items-center gap-0.5 sm:gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-xl transition-all ${
-                activeTab === tab.id 
-                ? 'text-amber-500 bg-amber-500/10' 
-                : 'text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              <tab.icon className="w-3.5 h-3.5 md:w-4 md:h-4" />
-              <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest">{tab.label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
-
       <main className="relative z-10 flex-1 w-full max-w-6xl mx-auto px-4 py-4 md:py-8 flex flex-col gap-6">
         
-        {activeTab === 'studio' && (
-          <div className="lg:col-span-12 space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            <StemStudio />
-          </div>
-        )}
-
-        {activeTab === 'practice' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-            <div className="space-y-4 md:space-y-6 animate-in slide-in-from-left-4 duration-500">
-              <Metronome />
-              <Tuner />
-              <RhythmLibrary />
+        {selectedComponentId && SelectedComponent ? (
+          <div className="animate-in fade-in zoom-in-95 duration-300">
+            <div className="mb-6">
+              <button 
+                onClick={handleBackToSearch}
+                className="flex items-center gap-2 text-slate-400 hover:text-white transition-all text-sm font-black uppercase tracking-widest bg-black/40 px-4 py-2 rounded-xl border border-white/5"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Voltar às Ferramentas
+              </button>
             </div>
-            <div className="space-y-4 md:space-y-6 animate-in slide-in-from-right-4 duration-500">
-              <SmartEar />
-              <AITeacher />
+            <SelectedComponent />
+          </div>
+        ) : (
+          <>
+            <div className="relative group mb-6">
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600 group-focus-within:text-amber-500 transition-colors" />
+              <input 
+                type="text"
+                placeholder="Pesquisar ferramentas (ex: metrônomo, baixaria, afinar)..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-zinc-900/80 border border-white/10 rounded-3xl py-5 pl-14 pr-6 text-sm text-white focus:ring-2 focus:ring-amber-600/40 outline-none transition-all placeholder:text-slate-600"
+              />
             </div>
-          </div>
-        )}
 
-        {activeTab === 'jam' && (
-          <div className="lg:col-span-12 space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            <GroupSimulator />
-          </div>
-        )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+              {filteredComponents.map((tool) => (
+                <button
+                  key={tool.id}
+                  onClick={() => setSelectedComponentId(tool.id)}
+                  className="group bg-slate-900 border border-slate-800 p-6 rounded-3xl hover:border-amber-600/50 transition-all cursor-pointer relative overflow-hidden text-left flex flex-col gap-3 h-full animate-in fade-in slide-in-from-bottom-2"
+                >
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <tool.icon className="w-16 h-16 text-amber-500/20" />
+                  </div>
+                  
+                  <div className="relative z-10">
+                    <div className="p-3 bg-amber-600/20 rounded-xl inline-flex mb-3">
+                      <tool.icon className="w-6 h-6 text-amber-500" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-100 mb-2 group-hover:text-amber-500 transition-colors">
+                      {tool.name}
+                    </h3>
+                    <p className="text-sm text-slate-400 line-clamp-2">
+                      {tool.description}
+                    </p>
+                  </div>
+                </button>
+              ))}
 
-        {activeTab === 'theory' && (
-          <div className="lg:col-span-12 space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            <ChordLibrary />
-          </div>
+              {filteredComponents.length === 0 && searchTerm && (
+                <div className="col-span-full py-24 text-center opacity-20">
+                  <Search className="w-16 h-16 mx-auto mb-4" />
+                  <p className="font-black uppercase tracking-widest text-xs">Nenhuma ferramenta encontrada para "{searchTerm}"</p>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         <section className="bg-white/5 p-4 md:p-5 rounded-[1.5rem] border border-white/5 shadow-inner mt-2 md:mt-4">

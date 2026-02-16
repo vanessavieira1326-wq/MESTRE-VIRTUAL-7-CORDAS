@@ -59,6 +59,7 @@ const StemStudio: React.FC = () => {
   // Audio Nodes Map
   const stemFilters = useRef<Record<string, { bass: BiquadFilterNode; mid: BiquadFilterNode; treble: BiquadFilterNode; gain: GainNode; panner: StereoPannerNode; kill: BiquadFilterNode }>>({});
   const masterGain = useRef<GainNode | null>(null);
+  const playbackRateNode = useRef<ConstantSourceNode | null>(null); // Novo: Para controlar playbackRate dinamicamente
 
   const startTime = useRef<number>(0);
   const offsetTime = useRef<number>(0);
@@ -77,6 +78,11 @@ const StemStudio: React.FC = () => {
 
     masterGain.current = ctx.createGain();
     masterGain.current.connect(ctx.destination);
+
+    // Inicializa o ConstantSourceNode para controlar playbackRate
+    playbackRateNode.current = ctx.createConstantSource();
+    playbackRateNode.current.offset.value = playbackSpeed; // Valor inicial
+    playbackRateNode.current.start(0);
 
     STEM_CONFIGS.forEach(stem => {
       const kill = ctx.createBiquadFilter();
@@ -114,7 +120,7 @@ const StemStudio: React.FC = () => {
       gain.gain.value = fx.isMuted ? 0 : (fx.volume / 100);
       panner.pan.value = fx.balance;
     });
-  }, [stemsFX]);
+  }, [playbackSpeed, stemsFX]);
 
   const updateFX = (id: string, key: keyof StemFX, value: any) => {
     setStemsFX(prev => {
@@ -155,7 +161,9 @@ const StemStudio: React.FC = () => {
       if (audioCtx.current.state === 'suspended') audioCtx.current.resume();
       sourceNode.current = audioCtx.current.createBufferSource();
       sourceNode.current.buffer = audioBuffer.current;
-      sourceNode.current.playbackRate.value = playbackSpeed;
+      
+      // Conectar playbackRate do sourceNode ao ConstantSourceNode
+      playbackRateNode.current?.connect(sourceNode.current.playbackRate);
       
       // Conectar source a todos os canais de processamento
       STEM_CONFIGS.forEach(stem => {
@@ -186,7 +194,7 @@ const StemStudio: React.FC = () => {
     if (!selectedFile) return;
     setFile(selectedFile);
     setIsProcessing(true);
-    initAudioEngine();
+    initAudioEngine(); // Garante que o AudioContext e o playbackRateNode estão prontos
 
     const reader = new FileReader();
     reader.readAsArrayBuffer(selectedFile);
@@ -216,8 +224,9 @@ const StemStudio: React.FC = () => {
 
   const animate = useCallback(() => {
     if (!isPlaying || !audioCtx.current || !audioBuffer.current) return;
-    const elapsed = (audioCtx.current.currentTime - startTime.current) * playbackSpeed;
-    const total = offsetTime.current + elapsed;
+    // O elapsed agora usa playbackSpeed diretamente do state, pois o sourceNode.playbackRate já está sendo atualizado
+    const elapsed = (audioCtx.current.currentTime - startTime.current); 
+    const total = offsetTime.current + (elapsed * playbackSpeed); // Calcula o total com base na velocidade atual
     
     if (total >= audioBuffer.current.duration) {
       setIsPlaying(false);
@@ -234,6 +243,13 @@ const StemStudio: React.FC = () => {
     else cancelAnimationFrame(requestRef.current);
     return () => cancelAnimationFrame(requestRef.current);
   }, [isPlaying, animate]);
+
+  // Novo useEffect para atualizar o playbackRate do ConstantSourceNode em tempo real
+  useEffect(() => {
+    if (playbackRateNode.current && audioCtx.current) {
+      playbackRateNode.current.offset.setTargetAtTime(playbackSpeed, audioCtx.current.currentTime, 0.05);
+    }
+  }, [playbackSpeed]);
 
   return (
     <div className="bg-[#050505] h-full flex flex-col relative overflow-hidden text-zinc-100 rounded-[3rem] border border-white/5 shadow-2xl">
@@ -280,7 +296,7 @@ const StemStudio: React.FC = () => {
             <div className="relative h-24 bg-black/40 rounded-[2rem] overflow-hidden border border-white/5 shadow-inner group">
               <div className="absolute inset-0 flex items-center justify-around px-6 gap-[2px] opacity-10">
                 {waveformData.map((h, i) => (
-                  <div key={i} className={`flex-1 rounded-full ${i/waveformData.length < currentTime/duration ? 'bg-amber-500' : 'bg-zinc-800'}`} style={{ height: `${Math.max(10, h * 150)}%` }} />
+                  <div key={i} className={`flex-1 rounded-full ${i/waveformData.length < (currentTime * playbackSpeed) /duration ? 'bg-amber-500' : 'bg-zinc-800'}`} style={{ height: `${Math.max(10, h * 150)}%` }} />
                 ))}
               </div>
               <div className="absolute top-0 bottom-0 w-1 bg-amber-500 z-20 shadow-glow" style={{ left: `${(currentTime / duration) * 100}%` }} />
