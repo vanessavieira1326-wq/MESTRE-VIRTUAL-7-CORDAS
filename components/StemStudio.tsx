@@ -400,7 +400,7 @@ const StemStudio: React.FC = () => {
                <div className="flex flex-col gap-2">
                   <span className="text-[8px] font-black text-zinc-700 uppercase tracking-widest text-center italic">Time-Stretch (BPM)</span>
                   <div className="flex items-center gap-4 bg-black p-3 rounded-3xl border border-white/10">
-                    <button onClick={() => setPlaybackSpeed(prev => Math.max(0.5, prev - 0.1))} className="text-white"><Minus className="w-4 h-4" /></button>
+                    <button onClick={() => setPlaybackSpeed(prev => Math.max(0.05, prev - 0.1))} className="text-white"><Minus className="w-4 h-4" /></button>
                     <span className="text-sm font-mono font-black text-amber-500 w-8 text-center">{Math.round(playbackSpeed * 100)}%</span>
                     <button onClick={() => setPlaybackSpeed(prev => Math.min(2.0, prev + 0.1))} className="text-white"><Plus className="w-4 h-4" /></button>
                   </div>
